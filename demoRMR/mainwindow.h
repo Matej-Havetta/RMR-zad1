@@ -70,7 +70,7 @@ public:
 #endif
 private:
 
-    robot robot;
+    robot _robot;
     //--skuste tu nic nevymazat... pridavajte co chcete, ale pri odoberani by sa mohol stat nejaky drobny problem, co bude vyhadzovat chyby
     Ui::MainWindow *ui;
      void paintEvent(QPaintEvent *event);// Q_DECL_OVERRIDE;

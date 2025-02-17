@@ -18,7 +18,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     //tu je napevno nastavena ip. treba zmenit na to co ste si zadali do text boxu alebo nejaku inu pevnu. co bude spravna
     ipaddress="127.0.0.1";//192.168.1.11toto je na niektory realny robot.. na lokal budete davat "127.0.0.1"
-    //  cap.open("http://192.168.1.11:8000/stream.mjpg");
+
     ui->setupUi(this);
     datacounter=0;
 #ifndef DISABLE_OPENCV
@@ -120,16 +120,16 @@ void MainWindow::on_pushButton_9_clicked() //start button
 
 
 
-    connect(&robot,SIGNAL(publishPosition(double,double,double)),this,SLOT(setUiValues(double,double,double)));
-    connect(&robot,SIGNAL(publishLidar(const LaserMeasurement &)),this,SLOT(paintThisLidar(const LaserMeasurement &)));
+    connect(&_robot,SIGNAL(publishPosition(double,double,double)),this,SLOT(setUiValues(double,double,double)));
+    connect(&_robot,SIGNAL(publishLidar(const LaserMeasurement &)),this,SLOT(paintThisLidar(const LaserMeasurement &)));
 #ifndef DISABLE_OPENCV
-    connect(&robot,SIGNAL(publishCamera(const cv::Mat &)),this,SLOT(paintThisCamera(const cv::Mat &)));
+    connect(&_robot,SIGNAL(publishCamera(const cv::Mat &)),this,SLOT(paintThisCamera(const cv::Mat &)));
 #endif
 #ifndef DISABLE_SKELETON
-    connect(&robot,SIGNAL(publishSkeleton(const skeleton &)),this,SLOT(paintThisSkeleton(const skeleton &)));
+    connect(&_robot,SIGNAL(publishSkeleton(const skeleton &)),this,SLOT(paintThisSkeleton(const skeleton &)));
 #endif
 
-    robot.initAndStartRobot(ipaddress);
+    _robot.initAndStartRobot(ipaddress);
     /// prepojenie joysticku s jeho callbackom... zas cez lambdu. neviem ci som to niekde spominal,ale lambdy su super. okrem toho mam este rad ternarne operatory a spolocneske hry ale to tiez nikoho nezaujima
     /// co vas vlastne zaujima? citanie komentov asi nie, inak by ste citali toto a ze tu je blbosti
     connect(
@@ -138,7 +138,7 @@ void MainWindow::on_pushButton_9_clicked() //start button
         double forw=0, rot=0;
         if(/*js==0 &&*/ axis==1){forw=-value*300;}
         if(/*js==0 &&*/ axis==0){rot=-value*(3.14159/2.0);}
-        this->robot.setSpeedVal(forw,rot);
+        this->_robot.setSpeedVal(forw,rot);
     }
     );
 }
@@ -146,31 +146,31 @@ void MainWindow::on_pushButton_9_clicked() //start button
 void MainWindow::on_pushButton_2_clicked() //forward
 {
     //pohyb dopredu
-    robot.setSpeed(500,0);
+    _robot.setSpeed(500,0);
 
 }
 
 void MainWindow::on_pushButton_3_clicked() //back
 {
-    robot.setSpeed(-250,0);
+    _robot.setSpeed(-250,0);
 
 }
 
 void MainWindow::on_pushButton_6_clicked() //left
 {
-    robot.setSpeed(0,3.14159/2);
+    _robot.setSpeed(0,3.14159/2);
 
 }
 
 void MainWindow::on_pushButton_5_clicked()//right
 {
-    robot.setSpeed(0,-3.14159/2);
+    _robot.setSpeed(0,-3.14159/2);
 
 }
 
 void MainWindow::on_pushButton_4_clicked() //stop
 {
-    robot.setSpeed(0,0);
+    _robot.setSpeed(0,0);
 
 }
 
