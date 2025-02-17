@@ -67,6 +67,7 @@ typedef struct
 
 typedef struct
 {
+    uint32_t synctimestamp;
     //---zakladny balik
     unsigned short timestamp;
     //narazniky

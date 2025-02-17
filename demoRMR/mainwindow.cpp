@@ -18,15 +18,14 @@ MainWindow::MainWindow(QWidget *parent) :
 
     //tu je napevno nastavena ip. treba zmenit na to co ste si zadali do text boxu alebo nejaku inu pevnu. co bude spravna
     ipaddress="127.0.0.1";//192.168.1.11toto je na niektory realny robot.. na lokal budete davat "127.0.0.1"
-  //  cap.open("http://192.168.1.11:8000/stream.mjpg");
+    //  cap.open("http://192.168.1.11:8000/stream.mjpg");
     ui->setupUi(this);
     datacounter=0;
-  //  timer = new QTimer(this);
-//    connect(timer, SIGNAL(timeout()), this, SLOT(getNewFrame()));
+#ifndef DISABLE_OPENCV
     actIndex=-1;
     useCamera1=false;
 
-
+#endif
 
 
     datacounter=0;
@@ -53,7 +52,7 @@ void MainWindow::paintEvent(QPaintEvent *event)
     rect= ui->frame->geometry();//ziskate porametre stvorca,do ktoreho chcete kreslit
     rect.translate(0,15);
     painter.drawRect(rect);
-
+#ifndef DISABLE_OPENCV
     if(useCamera1==true && actIndex>-1)/// ak zobrazujem data z kamery a aspon niektory frame vo vectore je naplneny
     {
         std::cout<<actIndex<<std::endl;
@@ -61,14 +60,21 @@ void MainWindow::paintEvent(QPaintEvent *event)
         painter.drawImage(rect,image.rgbSwapped());
     }
     else
+#endif
     {
         if(updateLaserPicture==1) ///ak mam nove data z lidaru
         {
             updateLaserPicture=0;
 
+
+            pero.setColor(Qt::red);//farba je zelena
+            painter.setPen(pero);
+            painter.drawEllipse(QPoint(rect.width()/2+rect.topLeft().x(), rect.height()/2+rect.topLeft().y()),15,15);
+            painter.drawLine(QPoint(rect.width()/2+rect.topLeft().x(), rect.height()/2+rect.topLeft().y()),QPoint(rect.width()/2+rect.topLeft().x(), rect.height()/2+rect.topLeft().y()-15));
+            pero.setColor(Qt::green);//farba je zelena
             painter.setPen(pero);
             //teraz tu kreslime random udaje... vykreslite to co treba... t.j. data z lidaru
-         //   std::cout<<copyOfLaserData.numberOfScans<<std::endl;
+            //   std::cout<<copyOfLaserData.numberOfScans<<std::endl;
             for(int k=0;k<copyOfLaserData.numberOfScans/*360*/;k++)
             {
                 int dist=copyOfLaserData.Data[k].scanDistance/20; ///vzdialenost nahodne predelena 20 aby to nejako vyzeralo v okne.. zmen podla uvazenia
@@ -79,6 +85,19 @@ void MainWindow::paintEvent(QPaintEvent *event)
             }
         }
     }
+#ifndef DISABLE_SKELETON
+    if(updateSkeletonPicture==1 )
+    {
+        painter.setPen(Qt::red);
+        for(int i=0;i<75;i++)
+        {
+            int xp=rect.width()-rect.width() * skeleJoints.joints[i].x+rect.topLeft().x();
+            int yp= (rect.height() *skeleJoints.joints[i].y)+rect.topLeft().y();
+            if(rect.contains(xp,yp))
+                painter.drawEllipse(QPoint(xp, yp),2,2);
+        }
+    }
+#endif
 }
 
 
@@ -86,146 +105,72 @@ void MainWindow::paintEvent(QPaintEvent *event)
 /// prepojenie signal slot je vo funkcii  on_pushButton_9_clicked
 void  MainWindow::setUiValues(double robotX,double robotY,double robotFi)
 {
-     ui->lineEdit_2->setText(QString::number(robotX));
-     ui->lineEdit_3->setText(QString::number(robotY));
-     ui->lineEdit_4->setText(QString::number(robotFi));
+    ui->lineEdit_2->setText(QString::number(robotX));
+    ui->lineEdit_3->setText(QString::number(robotY));
+    ui->lineEdit_4->setText(QString::number(robotFi));
 }
 
-///toto je calback na data z robota, ktory ste podhodili robotu vo funkcii on_pushButton_9_clicked
-/// vola sa vzdy ked dojdu nove data z robota. nemusite nic riesit, proste sa to stane
-int MainWindow::processThisRobot(TKobukiData robotdata)
-{
 
-
-    ///tu mozete robit s datami z robota
-    /// ale nic vypoctovo narocne - to iste vlakno ktore cita data z robota
-    ///teraz tu posielam rychlosti na zaklade toho co setne joystick a vypisujeme data z robota(kazdy 5ty krat. ale mozete skusit aj castejsie). vyratajte si polohu. a vypiste spravnu
-    /// tuto joystick cast mozete vklude vymazat,alebo znasilnit na vas regulator alebo ake mate pohnutky... kazdopadne, aktualne to blokuje gombiky cize tak
-    if(instance->count()>0)
-    {
-        if(forwardspeed==0 && rotationspeed!=0)
-            robot.setRotationSpeed(rotationspeed);
-        else if(forwardspeed!=0 && rotationspeed==0)
-            robot.setTranslationSpeed(forwardspeed);
-        else if((forwardspeed!=0 && rotationspeed!=0))
-            robot.setArcSpeed(forwardspeed,forwardspeed/rotationspeed);
-        else
-            robot.setTranslationSpeed(0);
-
-    }
-///TU PISTE KOD... TOTO JE TO MIESTO KED NEVIETE KDE ZACAT,TAK JE TO NAOZAJ TU. AK AJ TAK NEVIETE, SPYTAJTE SA CVICIACEHO MA TU NATO STRING KTORY DA DO HLADANIA XXX
-
-    if(datacounter%5)
-    {
-
-        ///ak nastavite hodnoty priamo do prvkov okna,ako je to na tychto zakomentovanych riadkoch tak sa moze stat ze vam program padne
-                // ui->lineEdit_2->setText(QString::number(robotdata.EncoderRight));
-                //ui->lineEdit_3->setText(QString::number(robotdata.EncoderLeft));
-                //ui->lineEdit_4->setText(QString::number(robotdata.GyroAngle));
-                /// lepsi pristup je nastavit len nejaku premennu, a poslat signal oknu na prekreslenie
-                /// okno pocuva vo svojom slote a vasu premennu nastavi tak ako chcete. prikaz emit to presne takto spravi
-                /// viac o signal slotoch tu: https://doc.qt.io/qt-5/signalsandslots.html
-        ///posielame sem nezmysli.. pohrajte sa nech sem idu zmysluplne veci
-        emit uiValuesChanged(robotdata.EncoderLeft,11,12);
-        ///toto neodporucam na nejake komplikovane struktury.signal slot robi kopiu dat. radsej vtedy posielajte
-        /// prazdny signal a slot bude vykreslovat strukturu (vtedy ju musite mat samozrejme ako member premmennu v mainwindow.ak u niekoho najdem globalnu premennu,tak bude cistit bludisko zubnou kefkou.. kefku dodam)
-        /// vtedy ale odporucam pouzit mutex, aby sa vam nestalo ze budete pocas vypisovania prepisovat niekde inde
-
-    }
-    datacounter++;
-
-    return 0;
-
-}
-
-///toto je calback na data z lidaru, ktory ste podhodili robotu vo funkcii on_pushButton_9_clicked
-/// vola sa ked dojdu nove data z lidaru
-int MainWindow::processThisLidar(LaserMeasurement laserData)
-{
-
-
-    memcpy( &copyOfLaserData,&laserData,sizeof(LaserMeasurement));
-    //tu mozete robit s datami z lidaru.. napriklad najst prekazky, zapisat do mapy. naplanovat ako sa prekazke vyhnut.
-    // ale nic vypoctovo narocne - to iste vlakno ktore cita data z lidaru
-    updateLaserPicture=1;
-    update();//tento prikaz prinuti prekreslit obrazovku.. zavola sa paintEvent funkcia
-
-
-    return 0;
-
-}
-
-///toto je calback na data z kamery, ktory ste podhodili robotu vo funkcii on_pushButton_9_clicked
-/// vola sa ked dojdu nove data z kamery
-int MainWindow::processThisCamera(cv::Mat cameraData)
-{
-
-    cameraData.copyTo(frame[(actIndex+1)%3]);//kopirujem do nasej strukury
-    actIndex=(actIndex+1)%3;//aktualizujem kde je nova fotka
-    updateLaserPicture=1;
-    return 0;
-}
 void MainWindow::on_pushButton_9_clicked() //start button
 {
     //ziskanie joystickov
     instance = QJoysticks::getInstance();
-    forwardspeed=0;
-    rotationspeed=0;
+
     //tu sa nastartuju vlakna ktore citaju data z lidaru a robota
-    connect(this,SIGNAL(uiValuesChanged(double,double,double)),this,SLOT(setUiValues(double,double,double)));
-
-    ///setovanie veci na komunikaciu s robotom/lidarom/kamerou.. su tam adresa porty a callback.. laser ma ze sa da dat callback aj ako lambda.
-    /// lambdy su super, setria miesto a ak su rozumnej dlzky,tak aj prehladnost... ak ste o nich nic nepoculi poradte sa s vasim doktorom alebo lekarnikom...
-    robot.setLaserParameters(ipaddress,52999,5299,/*[](LaserMeasurement dat)->int{std::cout<<"som z lambdy callback"<<std::endl;return 0;}*/std::bind(&MainWindow::processThisLidar,this,std::placeholders::_1));
-    robot.setRobotParameters(ipaddress,53000,5300,std::bind(&MainWindow::processThisRobot,this,std::placeholders::_1));
-    //---simulator ma port 8889, realny robot 8000
-    robot.setCameraParameters("http://"+ipaddress+":8889/stream.mjpg",std::bind(&MainWindow::processThisCamera,this,std::placeholders::_1));
-
-    ///ked je vsetko nasetovane tak to tento prikaz spusti (ak nieco nieje setnute,tak to normalne nenastavi.cize ak napr nechcete kameru,vklude vsetky info o nej vymazte)
-    robot.robotStart();
 
 
 
+    connect(&robot,SIGNAL(publishPosition(double,double,double)),this,SLOT(setUiValues(double,double,double)));
+    connect(&robot,SIGNAL(publishLidar(const LaserMeasurement &)),this,SLOT(paintThisLidar(const LaserMeasurement &)));
+#ifndef DISABLE_OPENCV
+    connect(&robot,SIGNAL(publishCamera(const cv::Mat &)),this,SLOT(paintThisCamera(const cv::Mat &)));
+#endif
+#ifndef DISABLE_SKELETON
+    connect(&robot,SIGNAL(publishSkeleton(const skeleton &)),this,SLOT(paintThisSkeleton(const skeleton &)));
+#endif
 
-
-
+    robot.initAndStartRobot(ipaddress);
     /// prepojenie joysticku s jeho callbackom... zas cez lambdu. neviem ci som to niekde spominal,ale lambdy su super. okrem toho mam este rad ternarne operatory a spolocneske hry ale to tiez nikoho nezaujima
     /// co vas vlastne zaujima? citanie komentov asi nie, inak by ste citali toto a ze tu je blbosti
     connect(
-        instance, &QJoysticks::axisChanged,
-        [this]( const int js, const int axis, const qreal value) { if(/*js==0 &&*/ axis==1){forwardspeed=-value*300;}
-            if(/*js==0 &&*/ axis==0){rotationspeed=-value*(3.14159/2.0);}}
+                instance, &QJoysticks::axisChanged,
+                [this]( const int js, const int axis, const qreal value) {
+        double forw=0, rot=0;
+        if(/*js==0 &&*/ axis==1){forw=-value*300;}
+        if(/*js==0 &&*/ axis==0){rot=-value*(3.14159/2.0);}
+        this->robot.setSpeedVal(forw,rot);
+    }
     );
 }
 
 void MainWindow::on_pushButton_2_clicked() //forward
 {
     //pohyb dopredu
-    robot.setTranslationSpeed(500);
+    robot.setSpeed(500,0);
 
 }
 
 void MainWindow::on_pushButton_3_clicked() //back
 {
-    robot.setTranslationSpeed(-250);
+    robot.setSpeed(-250,0);
 
 }
 
 void MainWindow::on_pushButton_6_clicked() //left
 {
-robot.setRotationSpeed(3.14159/2);
+    robot.setSpeed(0,3.14159/2);
 
 }
 
 void MainWindow::on_pushButton_5_clicked()//right
 {
-robot.setRotationSpeed(-3.14159/2);
+    robot.setSpeed(0,-3.14159/2);
 
 }
 
 void MainWindow::on_pushButton_4_clicked() //stop
 {
-    robot.setTranslationSpeed(0);
+    robot.setSpeed(0,0);
 
 }
 
@@ -234,6 +179,7 @@ void MainWindow::on_pushButton_4_clicked() //stop
 
 void MainWindow::on_pushButton_clicked()
 {
+#ifndef DISABLE_OPENCV
     if(useCamera1==true)
     {
         useCamera1=false;
@@ -246,9 +192,45 @@ void MainWindow::on_pushButton_clicked()
 
         ui->pushButton->setText("use laser");
     }
+#endif
 }
 
-void MainWindow::getNewFrame()
+
+
+
+
+int MainWindow::paintThisLidar(const LaserMeasurement &laserData)
+{
+    memcpy( &copyOfLaserData,&laserData,sizeof(LaserMeasurement));
+    updateLaserPicture=1;
+
+    update();
+    return 0;
+}
+
+#ifndef DISABLE_OPENCV
+
+///toto je calback na data z kamery, ktory ste podhodili robotu vo funkcii initAndStartRobot
+/// vola sa ked dojdu nove data z kamery
+int MainWindow::paintThisCamera(const cv::Mat &cameraData)
 {
 
+    cameraData.copyTo(frame[(actIndex+1)%3]);//kopirujem do nasej strukury
+    actIndex=(actIndex+1)%3;//aktualizujem kde je nova fotka
+
+
+    updateLaserPicture=1;
+
+    return 0;
 }
+#endif
+
+#ifndef DISABLE_SKELETON
+int MainWindow::paintThisSkeleton(const skeleton &skeledata)
+{
+    memcpy(&skeleJoints,&skeledata,sizeof(skeleton));
+
+    updateSkeletonPicture=1;
+    return 0;
+}
+#endif

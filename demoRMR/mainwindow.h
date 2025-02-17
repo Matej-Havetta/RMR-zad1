@@ -17,13 +17,8 @@
 #include<vector>
 //#include "ckobuki.h"
 //#include "rplidar.h"
-#include <opencv2/core/core.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include "opencv2/imgproc/imgproc.hpp"
-#include "opencv2/highgui/highgui.hpp"
-#include "opencv2/core/utility.hpp"
-#include "opencv2/videoio.hpp"
-#include "opencv2/imgcodecs.hpp"
+
+
 #include "robot.h"
 
 #include <QJoysticks.h>
@@ -37,23 +32,20 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
+    #ifndef DISABLE_OPENCV
     bool useCamera1;
-  //  cv::VideoCapture cap;
-
     int actIndex;
-    //    cv::Mat frame[3];
-
     cv::Mat frame[3];
+#endif
+
+#ifndef DISABLE_SKELETON
+    int updateSkeletonPicture;
+        skeleton skeleJoints;
+#endif
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
-    int processThisLidar(LaserMeasurement laserData);
-
-    int processThisRobot(TKobukiData robotdata);
-
-int processThisCamera(cv::Mat cameraData);
-
-private slots:
+   private slots:
     void on_pushButton_9_clicked();
 
     void on_pushButton_2_clicked();
@@ -67,30 +59,33 @@ private slots:
     void on_pushButton_4_clicked();
 
     void on_pushButton_clicked();
-    void getNewFrame();
 
+
+    int paintThisLidar(const LaserMeasurement &laserData);
+#ifndef DISABLE_OPENCV
+    int paintThisCamera(const cv::Mat &cameraData);
+#endif
+#ifndef DISABLE_SKELETON
+    int paintThisSkeleton(const skeleton &skeledata);
+#endif
 private:
 
+    robot robot;
     //--skuste tu nic nevymazat... pridavajte co chcete, ale pri odoberani by sa mohol stat nejaky drobny problem, co bude vyhadzovat chyby
     Ui::MainWindow *ui;
      void paintEvent(QPaintEvent *event);// Q_DECL_OVERRIDE;
      int updateLaserPicture;
      LaserMeasurement copyOfLaserData;
+         int datacounter;
      std::string ipaddress;
-     Robot robot;
-     TKobukiData robotdata;
-     int datacounter;
+
+
      QTimer *timer;
 
      QJoysticks *instance;
 
-     double forwardspeed;//mm/s
-     double rotationspeed;//omega/s
-public slots:
+  public slots:
      void setUiValues(double robotX,double robotY,double robotFi);
-signals:
-     void uiValuesChanged(double newrobotX,double newrobotY,double newrobotFi); ///toto nema telo
-
 
 };
 

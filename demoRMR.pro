@@ -1,6 +1,6 @@
 TEMPLATE = subdirs
 
-SUBDIRS += robot\
+SUBDIRS += librobot\
            demoRMR
 
 

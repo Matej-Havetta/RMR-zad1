@@ -1,8 +1,8 @@
-#ifndef ROBOT_H
-#define ROBOT_H
-
+#ifndef LIBROBOT_H
+#define LIBROBOT_H
+#ifndef DISABLE_OPENCV
 #define useCamera
-
+#endif
 #ifdef useCamera
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -27,12 +27,14 @@
 #include <random>
 #include <iostream>
 #include <memory>
+#include "udp_communication.h"
 
-class ROBOT_EXPORT Robot
+#include "skeleton.h"
+class ROBOT_EXPORT libRobot
 {
 public:
-    ~Robot();
-    Robot(std::string ipaddressLaser="127.0.0.1",int laserportRobot=52999, int laserportMe=5299,std::function<int(LaserMeasurement)> &lascallback=do_nothing_laser,std::string ipaddressRobot="127.0.0.1",int robotportRobot=53000, int robotportMe=5300,std::function<int(TKobukiData)> &robcallback=do_nothing_robot);
+    ~libRobot();
+    libRobot(std::string ipaddressLaser="127.0.0.1",int laserportRobot=52999, int laserportMe=5299,std::function<int(LaserMeasurement)> &lascallback=do_nothing_laser,std::string ipaddressRobot="127.0.0.1",int robotportRobot=53000, int robotportMe=5300,std::function<int(TKobukiData)> &robcallback=do_nothing_robot);
 
 
     //default functions.. please do not rewrite.. make your own callback
@@ -62,7 +64,7 @@ public:
 
     void setRotationSpeed(double radpersec);
     void setArcSpeed(int mmpersec,int radius);
-
+#ifndef DISABLE_OPENCV
     void setCameraParameters(std::string link,std::function<int(cv::Mat)> callback )
     {
 
@@ -70,6 +72,19 @@ public:
         camera_callback=callback;
         wasCameraSet=1;
     }
+#endif
+
+
+    void setSkeletonParameters(std::string ipaddress,int skeletonportRobot, int skeletonportMe,std::function<int(skeleton)> callback )
+       {
+           skeleton_ip_portOut=skeletonportRobot;
+           skeleton_ip_portIn=skeletonportMe;
+           skeleton_ipaddress=ipaddress;
+           skeleton_callback=callback;
+           wasSkeletonSet=1;
+       }
+
+
     long double tickToMeter = 0.000085292090497737556558; // [m/tick]
     long double b = 0.23; // wheelbase distance in meters, from kobuki manual https://yujinrobot.github.io/kobuki/doxygen/enAppendixProtocolSpecification.html
 
@@ -79,6 +94,7 @@ private:
     int wasLaserSet;
     int wasRobotSet;
     int wasCameraSet;
+    int wasSkeletonSet;
     //veci na laser
     LaserMeasurement copyOfLaserData;
     void laserprocess();
@@ -98,38 +114,28 @@ private:
     void robotprocess();
     std::function<int(TKobukiData)> robot_callback=nullptr;
 
+    udp_communication laserCom;
+    udp_communication robotCom;
 
     //veci pre kameru -- pozor na kameru, neotvarat ak nahodou chcete kameru pripojit na detekciu kostry...
-
+#ifndef DISABLE_OPENCV
     std::string camera_link;
     std::thread camerathreadhandle;
     std::function<int(cv::Mat)> camera_callback=nullptr;
     void imageViewer();
-
-    ///
-    ///
-    struct sockaddr_in las_si_me, las_si_other,las_si_posli;
-
-    int las_s,  las_recv_len;
-
-
-    struct sockaddr_in ske_si_me, ske_si_other,ske_si_posli;
-
-    int ske_s,  ske_recv_len;
-
-    //veci na broadcast robot
-    struct sockaddr_in rob_si_me, rob_si_other,rob_si_posli;
-
-    int rob_s,  rob_recv_len;
-#ifdef _WIN32
-        int rob_slen;
-        int las_slen;
-        int ske_slen;
-#else
-         unsigned int rob_slen;
-         unsigned int las_slen;
-         unsigned int ske_slen;
 #endif
+
+#ifndef DISABLE_SKELETON
+    //--veci pre kostru
+    udp_communication skeletonCom;
+        std::thread skeletonthreadHandle;
+        std::string skeleton_ipaddress;
+        int skeleton_ip_portOut;
+        int skeleton_ip_portIn;
+        void skeletonprocess();
+        std::function<int(skeleton)> skeleton_callback=nullptr;
+#endif
+
 };
 
-#endif // ROBOT_H
+#endif // LIBROBOT_H
