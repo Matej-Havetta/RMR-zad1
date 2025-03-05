@@ -1,21 +1,32 @@
 #include "robot.h"
 
+//here i am fighting for PI
+#define _USE_MATH_DEFINES
+#include <cmath>
+const double pi = 3.14159265358979323846;
+
 robot::robot(QObject *parent) : QObject(parent)
 {
     qRegisterMetaType<LaserMeasurement>("LaserMeasurement");
     #ifndef DISABLE_OPENCV
     qRegisterMetaType<cv::Mat>("cv::Mat");
-#endif
-#ifndef DISABLE_SKELETON
-qRegisterMetaType<skeleton>("skeleton");
-#endif
+    #endif
+    #ifndef DISABLE_SKELETON
+    qRegisterMetaType<skeleton>("skeleton");
+    #endif
 }
 
 void robot::initAndStartRobot(std::string ipaddress)
 {
 
+    x=0.00;
+    y=0.00;
+    fi=0.00;
     forwardspeed=0;
     rotationspeed=0;
+    previousEncoderLeft=0;
+    previousEncoderRight=0;
+
     ///setovanie veci na komunikaciu s robotom/lidarom/kamerou.. su tam adresa porty a callback.. laser ma ze sa da dat callback aj ako lambda.
     /// lambdy su super, setria miesto a ak su rozumnej dlzky,tak aj prehladnost... ak ste o nich nic nepoculi poradte sa s vasim doktorom alebo lekarnikom...
     robotCom.setLaserParameters(ipaddress,52999,5299,/*[](LaserMeasurement dat)->int{std::cout<<"som z lambdy callback"<<std::endl;return 0;}*/std::bind(&robot::processThisLidar,this,std::placeholders::_1));
@@ -42,13 +53,30 @@ void robot::setSpeedVal(double forw, double rots)
 void robot::setSpeed(double forw, double rots)
 {
     if(forw==0 && rots!=0)
+    {
         robotCom.setRotationSpeed(rots);
+        currentRotationSpeed=rots;
+        currentForwardSpeed=forw;
+
+    }
     else if(forw!=0 && rots==0)
+    {
         robotCom.setTranslationSpeed(forw);
+        currentRotationSpeed=rots;
+        currentForwardSpeed=forw;
+    }
     else if((forw!=0 && rots!=0))
+    {
         robotCom.setArcSpeed(forw,forw/rots);
+        currentRotationSpeed=rots;
+        currentForwardSpeed=forw;
+    }
     else
+    {
         robotCom.setTranslationSpeed(0);
+        currentRotationSpeed=rots;
+        currentForwardSpeed=forw;
+    }
     useDirectCommands=1;
 }
 
@@ -56,10 +84,7 @@ void robot::setSpeed(double forw, double rots)
 /// vola sa vzdy ked dojdu nove data z robota. nemusite nic riesit, proste sa to stane
 int robot::processThisRobot(TKobukiData robotdata)
 {
-
-
     ///tu mozete robit s datami z robota
-
 
 
 
@@ -68,6 +93,43 @@ int robot::processThisRobot(TKobukiData robotdata)
     ///kazdy piaty krat, aby to ui moc nepreblikavalo..
     if(datacounter%5==0)
     {
+        std::cout << to_string(robotdata.EncoderRight) + "\n";
+        std::cout << currentForwardSpeed;
+        std::cout << currentRotationSpeed;
+
+        // zmena v encoder
+        int deltaEncoderRight = robotdata.EncoderRight - previousEncoderRight;
+        int deltaEncoderLeft = robotdata.EncoderLeft - previousEncoderLeft;
+        // update encoders
+        previousEncoderRight = robotdata.EncoderRight;
+        previousEncoderLeft = robotdata.EncoderLeft;
+        // encoder to distance in metres
+        double rightWheelDist = deltaEncoderRight * robotCom.tickToMeter;
+        double leftWheelDist = deltaEncoderLeft * robotCom.tickToMeter;
+        //double distanceRight = (deltaEncoderRight / (double)1000) * pi * wheelDia; //1000 - počet impulzov na otáčku kolesa
+        //double distanceLeft = (deltaEncoderLeft / (double)1000) * pi * wheelDia;
+        double deltaDistance = (rightWheelDist + leftWheelDist)/2;
+
+        // uhol
+        double prevFi = fi;
+        // double deltaFi = (rightWheelDist - leftWheelDist)/ wheelBase;
+        double deltaFi = (rightWheelDist - leftWheelDist);
+        // double deltaFi = (deltaEncoderRight - deltaEncoderLeft);
+        fi += deltaFi;
+        fi = atan2(sin(fi), cos(fi));
+        //x,y
+        if (fi == 0.00)
+        {
+            x += deltaDistance * cos(fi);
+            y += deltaDistance * sin(fi);
+        }
+        else
+        {
+            //x += deltaDistance * (sin(fi) - sin(prevFi));
+            //y += deltaDistance * (cos(fi) - cos(prevFi));
+            x += (robotCom.b*(rightWheelDist+leftWheelDist))/(2*(rightWheelDist-leftWheelDist)) * (sin(fi) - sin(prevFi));
+            y -= (robotCom.b*(rightWheelDist+leftWheelDist))/(2*(rightWheelDist-leftWheelDist)) * (cos(fi) - cos(prevFi));
+        }
 
         ///ak nastavite hodnoty priamo do prvkov okna,ako je to na tychto zakomentovanych riadkoch tak sa moze stat ze vam program padne
         // ui->lineEdit_2->setText(QString::number(robotdata.EncoderRight));
@@ -77,9 +139,10 @@ int robot::processThisRobot(TKobukiData robotdata)
         /// okno pocuva vo svojom slote a vasu premennu nastavi tak ako chcete. prikaz emit to presne takto spravi
         /// viac o signal slotoch tu: https://doc.qt.io/qt-5/signalsandslots.html
         ///posielame sem nezmysli.. pohrajte sa nech sem idu zmysluplne veci
-        emit publishPosition(x,y,fi);
-        ///toto neodporucam na nejake komplikovane struktury.signal slot robi kopiu dat. radsej vtedy posielajte
-        /// prazdny signal a slot bude vykreslovat strukturu (vtedy ju musite mat samozrejme ako member premmennu v mainwindow.ak u niekoho najdem globalnu premennu,tak bude cistit bludisko zubnou kefkou.. kefku dodam)
+        emit publishPosition(x*100,y*100,fi * (180 / pi));
+        //std::cout << x;
+        ///toto neodporucam na nejake komplikovane struktury. signal slot robi kopiu dat. radsej vtedy posielajte
+        /// prazdny signal a slot bude vykreslovat strukturu (vtedy ju musite mat samozrejme ako member premmennu v mainwindow. ak u niekoho najdem globalnu premennu,tak bude cistit bludisko zubnou kefkou.. kefku dodam)
         /// vtedy ale odporucam pouzit mutex, aby sa vam nestalo ze budete pocas vypisovania prepisovat niekde inde
 
     }

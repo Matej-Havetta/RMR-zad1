@@ -12,6 +12,7 @@
 #include "opencv2/core/utility.hpp"
 #include "opencv2/videoio.hpp"
 #include "opencv2/imgcodecs.hpp"
+#include <cmath>
 
 
 Q_DECLARE_METATYPE(cv::Mat)
@@ -51,6 +52,15 @@ private:
 /// toto su rychlosti ktore sa nastavuju setSpeedVal a posielaju v processThisRobot
     double forwardspeed;//mm/s
     double rotationspeed;//omega/s
+    // idk if i can use these to obtain the velocity from setSpeed so I made my own
+    double currentForwardSpeed;
+    double currentRotationSpeed;
+
+    // I MADE THESE - I SUCK AT CPP - IDK
+    int previousEncoderRight;
+    int previousEncoderLeft;
+    const float wheelDia=0.05;
+    const float wheelBase=0.32;
 
     ///toto su callbacky co sa sa volaju s novymi datami
     int processThisLidar(LaserMeasurement laserData);
