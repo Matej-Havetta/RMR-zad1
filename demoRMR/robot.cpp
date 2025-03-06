@@ -19,7 +19,7 @@ robot::robot(QObject *parent) : QObject(parent)
 void robot::initAndStartRobot(std::string ipaddress)
 {
 
-    x=0.00;
+    xko=0.00;
     y=0.00;
     fi=0.00;
     forwardspeed=0;
@@ -97,37 +97,37 @@ int robot::processThisRobot(TKobukiData robotdata)
         std::cout << currentForwardSpeed;
         std::cout << currentRotationSpeed;
 
-        // zmena v encoder
-        int deltaEncoderRight = robotdata.EncoderRight - previousEncoderRight;
-        int deltaEncoderLeft = robotdata.EncoderLeft - previousEncoderLeft;
+        // zmena v encoder  10551 - 10918
+        short deltaEncoderRight = (robotdata.EncoderRight) - (previousEncoderRight);
+        short deltaEncoderLeft = (robotdata.EncoderLeft) - (previousEncoderLeft);
         // update encoders
         previousEncoderRight = robotdata.EncoderRight;
         previousEncoderLeft = robotdata.EncoderLeft;
         // encoder to distance in metres
-        double rightWheelDist = deltaEncoderRight * robotCom.tickToMeter;
-        double leftWheelDist = deltaEncoderLeft * robotCom.tickToMeter;
+        double rightWheelDist = ((double) deltaEncoderRight) * robotCom.tickToMeter;
+        double leftWheelDist = ((double) deltaEncoderLeft) * robotCom.tickToMeter;
         //double distanceRight = (deltaEncoderRight / (double)1000) * pi * wheelDia; //1000 - počet impulzov na otáčku kolesa
         //double distanceLeft = (deltaEncoderLeft / (double)1000) * pi * wheelDia;
         double deltaDistance = (rightWheelDist + leftWheelDist)/2;
-
         // uhol
         double prevFi = fi;
-        // double deltaFi = (rightWheelDist - leftWheelDist)/ wheelBase;
-        double deltaFi = (rightWheelDist - leftWheelDist);
+        double deltaFi = (rightWheelDist - leftWheelDist)/ wheelBase;
+        // double deltaFi = (rightWheelDist - leftWheelDist);
         // double deltaFi = (deltaEncoderRight - deltaEncoderLeft);
         fi += deltaFi;
         fi = atan2(sin(fi), cos(fi));
+
         //x,y
-        if (fi == 0.00)
+        if (deltaFi == 0.00)
         {
-            x += deltaDistance * cos(fi);
-            y += deltaDistance * sin(fi);
+            xko += deltaDistance * (double) cos(fi);
+            y += deltaDistance * (double) sin(fi);
         }
         else
         {
             //x += deltaDistance * (sin(fi) - sin(prevFi));
             //y += deltaDistance * (cos(fi) - cos(prevFi));
-            x += (robotCom.b*(rightWheelDist+leftWheelDist))/(2*(rightWheelDist-leftWheelDist)) * (sin(fi) - sin(prevFi));
+            xko += (robotCom.b*(rightWheelDist+leftWheelDist))/(2*(rightWheelDist-leftWheelDist)) * (sin(fi) - sin(prevFi));
             y -= (robotCom.b*(rightWheelDist+leftWheelDist))/(2*(rightWheelDist-leftWheelDist)) * (cos(fi) - cos(prevFi));
         }
 
@@ -139,7 +139,7 @@ int robot::processThisRobot(TKobukiData robotdata)
         /// okno pocuva vo svojom slote a vasu premennu nastavi tak ako chcete. prikaz emit to presne takto spravi
         /// viac o signal slotoch tu: https://doc.qt.io/qt-5/signalsandslots.html
         ///posielame sem nezmysli.. pohrajte sa nech sem idu zmysluplne veci
-        emit publishPosition(x*100,y*100,fi * (180 / pi));
+        emit publishPosition(xko*100,y*100,fi * (180 / pi));
         //std::cout << x;
         ///toto neodporucam na nejake komplikovane struktury. signal slot robi kopiu dat. radsej vtedy posielajte
         /// prazdny signal a slot bude vykreslovat strukturu (vtedy ju musite mat samozrejme ako member premmennu v mainwindow. ak u niekoho najdem globalnu premennu,tak bude cistit bludisko zubnou kefkou.. kefku dodam)

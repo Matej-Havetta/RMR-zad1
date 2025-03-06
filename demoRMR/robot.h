@@ -45,7 +45,7 @@ void publishSkeleton(const skeleton &skeledata);
 private:
 
     /// toto su vase premenne na vasu odometriu
-    double x;
+    double xko;
     double y;
     double fi;
 ///-----------------------------
@@ -53,12 +53,13 @@ private:
     double forwardspeed;//mm/s
     double rotationspeed;//omega/s
     // idk if i can use these to obtain the velocity from setSpeed so I made my own
+    // plus idk the correct type hehe
     double currentForwardSpeed;
     double currentRotationSpeed;
 
     // I MADE THESE - I SUCK AT CPP - IDK
-    int previousEncoderRight;
-    int previousEncoderLeft;
+    unsigned short previousEncoderRight;
+    unsigned short previousEncoderLeft;
     const float wheelDia=0.05;
     const float wheelBase=0.32;
 
