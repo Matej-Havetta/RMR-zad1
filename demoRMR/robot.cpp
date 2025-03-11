@@ -22,10 +22,13 @@ void robot::initAndStartRobot(std::string ipaddress)
     xko=0.00;
     y=0.00;
     fi=0.00;
+    prevFi=0.00;
     forwardspeed=0;
     rotationspeed=0;
     previousEncoderLeft=0;
     previousEncoderRight=0;
+    gyroStart=0.00;
+    prevGyro=0.00;
 
     ///setovanie veci na komunikaciu s robotom/lidarom/kamerou.. su tam adresa porty a callback.. laser ma ze sa da dat callback aj ako lambda.
     /// lambdy su super, setria miesto a ak su rozumnej dlzky,tak aj prehladnost... ak ste o nich nic nepoculi poradte sa s vasim doktorom alebo lekarnikom...
@@ -93,11 +96,10 @@ int robot::processThisRobot(TKobukiData robotdata)
     ///kazdy piaty krat, aby to ui moc nepreblikavalo..
     if(datacounter%5==0)
     {
+        //distance
         std::cout << to_string(robotdata.EncoderRight) + "\n";
         std::cout << currentForwardSpeed;
         std::cout << currentRotationSpeed;
-
-        // zmena v encoder  10551 - 10918
         short deltaEncoderRight = (robotdata.EncoderRight) - (previousEncoderRight);
         short deltaEncoderLeft = (robotdata.EncoderLeft) - (previousEncoderLeft);
         // update encoders
@@ -109,27 +111,37 @@ int robot::processThisRobot(TKobukiData robotdata)
         //double distanceRight = (deltaEncoderRight / (double)1000) * pi * wheelDia; //1000 - počet impulzov na otáčku kolesa
         //double distanceLeft = (deltaEncoderLeft / (double)1000) * pi * wheelDia;
         double deltaDistance = (rightWheelDist + leftWheelDist)/2;
+
         // uhol
-        double prevFi = fi;
-        double deltaFi = (rightWheelDist - leftWheelDist)/ wheelBase;
+        double prevGyro;
+        double gyro = robotdata.GyroAngle/100.00;
+        double gyroRad = (((gyro)*pi)/180.0);
+
+
+
+        //double deltaFi = (rightWheelDist - leftWheelDist) / wheelBase;
         // double deltaFi = (rightWheelDist - leftWheelDist);
         // double deltaFi = (deltaEncoderRight - deltaEncoderLeft);
-        fi += deltaFi;
-        fi = atan2(sin(fi), cos(fi));
+        //fi += deltaFi;
+        //double fiInRad = fi * (pi / 180.0);
+        //double prevFiInRad= prevFi * (pi/180.0);
+        //fi = atan2(sin(fi), cos(fi));
 
         //x,y
-        if (deltaFi == 0.00)
+        if (fi == 0.00)
         {
-            xko += deltaDistance * (double) cos(fi);
-            y += deltaDistance * (double) sin(fi);
+            xko += deltaDistance * (double) cos(gyroRad);
+            y += deltaDistance * (double) sin(gyroRad);
         }
         else
         {
-            //x += deltaDistance * (sin(fi) - sin(prevFi));
-            //y += deltaDistance * (cos(fi) - cos(prevFi));
-            xko += (robotCom.b*(rightWheelDist+leftWheelDist))/(2*(rightWheelDist-leftWheelDist)) * (sin(fi) - sin(prevFi));
-            y -= (robotCom.b*(rightWheelDist+leftWheelDist))/(2*(rightWheelDist-leftWheelDist)) * (cos(fi) - cos(prevFi));
+            xko += deltaDistance * (double)(sin(gyroRad) - sin(prevGyro*pi/180.00));
+            y -= deltaDistance * (double)(cos(gyroRad) - cos(prevGyro*pi/180.00));
+            //xko += (robotCom.b*(rightWheelDist+leftWheelDist))/(2*(rightWheelDist-leftWheelDist)) * (sin(fi) - sin(prevFi));
+            //y -= (robotCom.b*(rightWheelDist+leftWheelDist))/(2*(rightWheelDist-leftWheelDist)) * (cos(fi) - cos(prevFi));
         }
+        //prevFi = fi;
+        prevGyro=gyroRad;
 
         ///ak nastavite hodnoty priamo do prvkov okna,ako je to na tychto zakomentovanych riadkoch tak sa moze stat ze vam program padne
         // ui->lineEdit_2->setText(QString::number(robotdata.EncoderRight));
@@ -139,7 +151,7 @@ int robot::processThisRobot(TKobukiData robotdata)
         /// okno pocuva vo svojom slote a vasu premennu nastavi tak ako chcete. prikaz emit to presne takto spravi
         /// viac o signal slotoch tu: https://doc.qt.io/qt-5/signalsandslots.html
         ///posielame sem nezmysli.. pohrajte sa nech sem idu zmysluplne veci
-        emit publishPosition(xko*100,y*100,fi * (180 / pi));
+        emit publishPosition(xko*100,y*100,gyro);
         //std::cout << x;
         ///toto neodporucam na nejake komplikovane struktury. signal slot robi kopiu dat. radsej vtedy posielajte
         /// prazdny signal a slot bude vykreslovat strukturu (vtedy ju musite mat samozrejme ako member premmennu v mainwindow. ak u niekoho najdem globalnu premennu,tak bude cistit bludisko zubnou kefkou.. kefku dodam)

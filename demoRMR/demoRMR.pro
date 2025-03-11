@@ -137,10 +137,12 @@ unix {
 
 }
 SOURCES += main.cpp\
+        PID.cpp \
         mainwindow.cpp \
         robot.cpp
 
 HEADERS  += mainwindow.h \
+    PID.h \
     robot.h
 
 FORMS    += mainwindow.ui

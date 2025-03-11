@@ -9,7 +9,8 @@
 /// KED SA NAJBLIZSIE PUSTIS DO PRACE, SKONTROLUJ CI JE MIESTO TOHTO TEXTU TVOJ IDENTIFIKATOR
 /// AZ POTOM ZACNI ROBIT... AK TO NESPRAVIS, POJDU BODY DOLE... A NIE JEDEN,ALEBO DVA ALE BUDES RAD
 /// AK SA DOSTANES NA SKUSKU
-
+/// SOM ROOT
+/// ACTUALLY SOM DORKA, NECHCEM STRATIT BODY
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -132,6 +133,7 @@ void MainWindow::on_pushButton_9_clicked() //start button
     _robot.initAndStartRobot(ipaddress);
     /// prepojenie joysticku s jeho callbackom... zas cez lambdu. neviem ci som to niekde spominal,ale lambdy su super. okrem toho mam este rad ternarne operatory a spolocneske hry ale to tiez nikoho nezaujima
     /// co vas vlastne zaujima? citanie komentov asi nie, inak by ste citali toto a ze tu je blbosti
+    /// VELMI NAS BAVI CITANIE VASICH KOMENTOV, VIAC AKO SMOTNE ZADANIE FOR SURE :)
     connect(
                 instance, &QJoysticks::axisChanged,
                 [this]( const int js, const int axis, const qreal value) {

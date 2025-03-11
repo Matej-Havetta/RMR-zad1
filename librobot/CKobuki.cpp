@@ -5,13 +5,6 @@
 #include <iostream>
 
 
-
-
-
-
-
-
-
 int CKobuki::checkChecksum(unsigned char * data)
 {//najprv hlavicku
     unsigned char chckSum = 0;

@@ -56,6 +56,9 @@ private:
     // plus idk the correct type hehe
     double currentForwardSpeed;
     double currentRotationSpeed;
+    double prevFi;
+    double gyroStart;
+    double prevGyro;
 
     // I MADE THESE - I SUCK AT CPP - IDK
     unsigned short previousEncoderRight;
