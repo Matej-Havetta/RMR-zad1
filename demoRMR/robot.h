@@ -4,6 +4,8 @@
 #include <QObject>
 #include <QWidget>
 #include "librobot.h"
+#include <deque>
+#include "PID.h"
 #ifndef DISABLE_OPENCV
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -13,7 +15,6 @@
 #include "opencv2/videoio.hpp"
 #include "opencv2/imgcodecs.hpp"
 #include <cmath>
-
 
 Q_DECLARE_METATYPE(cv::Mat)
 #endif
@@ -59,6 +60,11 @@ private:
     double prevFi;
     double gyroStart;
     double prevGyro;
+
+    ///waypoints and controllers
+    std::deque<std::pair<double, double>> waypointQueue;
+    PIDController *rotationPID;
+    PIDController *distancePID;
 
     // I MADE THESE - I SUCK AT CPP - IDK
     unsigned short previousEncoderRight;

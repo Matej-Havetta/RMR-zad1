@@ -1,9 +1,11 @@
 #include "robot.h"
+#include <deque>
 
 //here i am fighting for PI
 #define _USE_MATH_DEFINES
 #include <cmath>
 const double pi = 3.14159265358979323846;
+
 
 robot::robot(QObject *parent) : QObject(parent)
 {
@@ -18,17 +20,38 @@ robot::robot(QObject *parent) : QObject(parent)
 
 void robot::initAndStartRobot(std::string ipaddress)
 {
+    // Defining PID gains
+    const double kp_rotation = 1.0;
+    const double ki_rotation = 0.1;
+    const double kd_rotation = 0.01;
+    double integral_rotation=0.01;
+    const double dt_rotation = 0.01; // where the fuck do i get this
+
+    const double kp_distance = 2.0;
+    const double ki_distance = 0.2;
+    const double kd_distance = 0.02;
+    double integral_distance=0.01;
+    const double dt_distance = 0.02; // where the fuck do i get this
 
     xko=0.00;
     y=0.00;
     fi=0.00;
     prevFi=0.00;
-    forwardspeed=0;
+
+    forwardspeed=10.0;
     rotationspeed=0;
+
     previousEncoderLeft=0;
     previousEncoderRight=0;
     gyroStart=0.00;
     prevGyro=0.00;
+
+    //std::deque<std::pair<double, double>>
+    waypointQueue.emplace_back(120.0, 40.0);
+    waypointQueue.emplace_back(4.0, 70.0);
+
+    rotationPID = new PIDController(kp_rotation, ki_rotation, kd_rotation, dt_rotation, 0.0, 0.0);
+    distancePID = new PIDController(kp_distance, ki_distance, kd_distance, dt_distance, 0.0, 0.0);
 
     ///setovanie veci na komunikaciu s robotom/lidarom/kamerou.. su tam adresa porty a callback.. laser ma ze sa da dat callback aj ako lambda.
     /// lambdy su super, setria miesto a ak su rozumnej dlzky,tak aj prehladnost... ak ste o nich nic nepoculi poradte sa s vasim doktorom alebo lekarnikom...
@@ -97,9 +120,9 @@ int robot::processThisRobot(TKobukiData robotdata)
     if(datacounter%5==0)
     {
         //distance
-        std::cout << to_string(robotdata.EncoderRight) + "\n";
-        std::cout << currentForwardSpeed;
-        std::cout << currentRotationSpeed;
+        // std::cout << to_string(robotdata.EncoderRight) + "\n";
+        // std::cout << currentForwardSpeed;
+        // std::cout << currentRotationSpeed;
         short deltaEncoderRight = (robotdata.EncoderRight) - (previousEncoderRight);
         short deltaEncoderLeft = (robotdata.EncoderLeft) - (previousEncoderLeft);
         // update encoders
@@ -152,6 +175,7 @@ int robot::processThisRobot(TKobukiData robotdata)
         /// viac o signal slotoch tu: https://doc.qt.io/qt-5/signalsandslots.html
         ///posielame sem nezmysli.. pohrajte sa nech sem idu zmysluplne veci
         emit publishPosition(xko*100,y*100,gyro);
+        fi=gyro;
         //std::cout << x;
         ///toto neodporucam na nejake komplikovane struktury. signal slot robi kopiu dat. radsej vtedy posielajte
         /// prazdny signal a slot bude vykreslovat strukturu (vtedy ju musite mat samozrejme ako member premmennu v mainwindow. ak u niekoho najdem globalnu premennu,tak bude cistit bludisko zubnou kefkou.. kefku dodam)
@@ -159,18 +183,72 @@ int robot::processThisRobot(TKobukiData robotdata)
 
     }
     ///---tu sa posielaju rychlosti do robota... vklude zakomentujte ak si chcete spravit svoje
-    if(useDirectCommands==0)
-    {
-        if(forwardspeed==0 && rotationspeed!=0)
-            robotCom.setRotationSpeed(rotationspeed);
-        else if(forwardspeed!=0 && rotationspeed==0)
-            robotCom.setTranslationSpeed(forwardspeed);
-        else if((forwardspeed!=0 && rotationspeed!=0))
-            robotCom.setArcSpeed(forwardspeed,forwardspeed/rotationspeed);
-        else
+    // if(useDirectCommands==0)
+    // {
+    //     if(forwardspeed==0 && rotationspeed!=0)
+    //         robotCom.setRotationSpeed(rotationspeed);
+    //     else if(forwardspeed!=0 && rotationspeed==0)
+    //         robotCom.setTranslationSpeed(forwardspeed);
+    //     else if((forwardspeed!=0 && rotationspeed!=0))
+    //         robotCom.setArcSpeed(forwardspeed,forwardspeed/rotationspeed);
+    //     else
+    //         robotCom.setTranslationSpeed(0);
+    // }
+    // datacounter++;
+
+    if (useDirectCommands == 0) {
+        if (!waypointQueue.empty()) {
+            std::pair<double, double> targetWaypoint = waypointQueue.front();
+            double targetX = targetWaypoint.first;
+            double targetY = targetWaypoint.second;
+
+            // Calculate desired angle
+            double deltaX = targetX - xko; // xko is your robots x coordinate
+            double deltaY = targetY - y; // y is your robots y coordinate
+            double desiredAngle = atan2(deltaY, deltaX);
+
+            // Calculate angle error
+            double angleError = desiredAngle - fi;
+            angleError = atan2(sin(angleError), cos(angleError)); // Normalize
+
+            // Rotation PID
+            double rotationSpeed = rotationPID->update(0, angleError); // Setpoint is 0 error
+
+            // Calculate distance to waypoint
+            double distance = sqrt(pow(deltaX, 2) + pow(deltaY, 2));
+
+            // Distance PID
+            double forwardSpeed = distancePID->update(0, distance); // Setpoint is 0 distance
+
+            // Check for angle deviation
+            double angleDeviationThreshold = 0.1; // Example threshold (radians)
+            if (abs(angleError) > angleDeviationThreshold && forwardSpeed > 0.1) {
+                forwardSpeed = 0; // Stop forward movement
+            }
+
+            // Apply speeds to robot
+            if (forwardSpeed == 0 && rotationSpeed != 0) {
+                robotCom.setRotationSpeed(rotationSpeed);
+            } else if (forwardSpeed != 0 && rotationSpeed == 0) {
+                robotCom.setTranslationSpeed(forwardSpeed);
+            } else if (forwardSpeed != 0 && rotationSpeed != 0) {
+                robotCom.setArcSpeed(forwardSpeed, forwardSpeed / rotationSpeed);
+            } else {
+                robotCom.setTranslationSpeed(0);
+            }
+
+            // Check if waypoint reached
+            double waypointReachedThreshold = 0.1; // Example threshold (meters)
+            if (distance < waypointReachedThreshold) {
+                waypointQueue.pop_front();
+            }
+        } else {
+            // No waypoints, stop the robot
             robotCom.setTranslationSpeed(0);
+        }
     }
     datacounter++;
+
 
     return 0;
 
