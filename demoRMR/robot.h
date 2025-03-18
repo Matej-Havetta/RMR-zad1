@@ -29,7 +29,7 @@ public:
     explicit robot(QObject *parent = nullptr);
 
     void initAndStartRobot(std::string ipaddress);
-
+    void calculateXY(TKobukiData robotdata);
     //tato funkcia len nastavuje hodnoty.. posielaju sa v callbacku(dobre, kvoli asynchronnosti a zabezpeceniu,ze sa poslu len raz pri viacero prepisoch vramci callu)
     void setSpeedVal(double forw,double rots);
     //tato funkcia fyzicky posiela hodnoty do robota

@@ -21,33 +21,31 @@ robot::robot(QObject *parent) : QObject(parent)
 void robot::initAndStartRobot(std::string ipaddress)
 {
     // Defining PID gains
-    const double kp_rotation = 1.0;
-    const double ki_rotation = 0.1;
-    const double kd_rotation = 0.01;
-    double integral_rotation=0.01;
-    const double dt_rotation = 0.01; // where the fuck do i get this
+    const double kp_rotation = 0.3;
+    const double ki_rotation = 0.01;
+    const double kd_rotation = 0.05;
+    const double dt_rotation = 0.01; // where the fuck do i get this from
 
-    const double kp_distance = 2.0;
-    const double ki_distance = 0.2;
+    const double kp_distance = 0.10;
+    const double ki_distance = 0.01;
     const double kd_distance = 0.02;
-    double integral_distance=0.01;
-    const double dt_distance = 0.02; // where the fuck do i get this
+    const double dt_distance = 0.01; // where the fuck do i get this from
 
     xko=0.00;
     y=0.00;
     fi=0.00;
     prevFi=0.00;
-
-    forwardspeed=10.0;
-    rotationspeed=0;
-
-    previousEncoderLeft=0;
-    previousEncoderRight=0;
     gyroStart=0.00;
     prevGyro=0.00;
 
+    forwardspeed=0.0;
+    rotationspeed=0.0;
+
+    previousEncoderLeft=0;
+    previousEncoderRight=0;
+
     //std::deque<std::pair<double, double>>
-    waypointQueue.emplace_back(120.0, 40.0);
+    waypointQueue.emplace_back(80.0, -20.0);
     waypointQueue.emplace_back(4.0, 70.0);
 
     rotationPID = new PIDController(kp_rotation, ki_rotation, kd_rotation, dt_rotation, 0.0, 0.0);
@@ -67,6 +65,49 @@ void robot::initAndStartRobot(std::string ipaddress)
     robotCom.robotStart();
 
 
+}
+
+void robot::calculateXY(TKobukiData robotdata) { // double& xko, double& y
+
+    //distance
+    short deltaEncoderRight = (robotdata.EncoderRight) - (previousEncoderRight);
+    short deltaEncoderLeft = (robotdata.EncoderLeft) - (previousEncoderLeft);
+    // update encoders
+    previousEncoderRight = robotdata.EncoderRight;
+    previousEncoderLeft = robotdata.EncoderLeft;
+    // encoder to distance in metres
+    double rightWheelDist = ((double) deltaEncoderRight) * robotCom.tickToMeter;
+    double leftWheelDist = ((double) deltaEncoderLeft) * robotCom.tickToMeter;
+    double deltaDistance = (rightWheelDist + leftWheelDist)/2;
+
+    // uhol
+    //double prevGyro;
+    double gyro = robotdata.GyroAngle/100.00;
+    double gyroRad = (((gyro)*pi)/180.0);
+    //double deltaFi = (rightWheelDist - leftWheelDist) / wheelBase;
+    // double deltaFi = (rightWheelDist - leftWheelDist);
+    // double deltaFi = (deltaEncoderRight - deltaEncoderLeft);
+    //fi += deltaFi;
+    //double fiInRad = fi * (pi / 180.0);
+    //double prevFiInRad= prevFi * (pi/180.0);
+    //fi = atan2(sin(fi), cos(fi));
+
+    //x,y
+    if (prevGyro == gyroRad)
+    {
+        xko += deltaDistance * (double) cos(gyroRad);
+        y += deltaDistance * (double) sin(gyroRad);
+    }
+    else
+    {
+        // xko += deltaDistance * (double)(sin(gyroRad) - sin(prevGyro*pi/180.00));
+        // y -= deltaDistance * (double)(cos(gyroRad) - cos(prevGyro*pi/180.00));
+        xko += deltaDistance * (double)(sin(gyroRad) - sin(prevGyro));
+        y -= deltaDistance * (double)(cos(gyroRad) -  cos(prevGyro));
+    }
+    //prevFi = fi;
+    prevGyro=gyroRad;
+    fi=gyro;
 }
 
 void robot::setSpeedVal(double forw, double rots)
@@ -119,53 +160,7 @@ int robot::processThisRobot(TKobukiData robotdata)
     ///kazdy piaty krat, aby to ui moc nepreblikavalo..
     if(datacounter%5==0)
     {
-        //distance
-        // std::cout << to_string(robotdata.EncoderRight) + "\n";
-        // std::cout << currentForwardSpeed;
-        // std::cout << currentRotationSpeed;
-        short deltaEncoderRight = (robotdata.EncoderRight) - (previousEncoderRight);
-        short deltaEncoderLeft = (robotdata.EncoderLeft) - (previousEncoderLeft);
-        // update encoders
-        previousEncoderRight = robotdata.EncoderRight;
-        previousEncoderLeft = robotdata.EncoderLeft;
-        // encoder to distance in metres
-        double rightWheelDist = ((double) deltaEncoderRight) * robotCom.tickToMeter;
-        double leftWheelDist = ((double) deltaEncoderLeft) * robotCom.tickToMeter;
-        //double distanceRight = (deltaEncoderRight / (double)1000) * pi * wheelDia; //1000 - počet impulzov na otáčku kolesa
-        //double distanceLeft = (deltaEncoderLeft / (double)1000) * pi * wheelDia;
-        double deltaDistance = (rightWheelDist + leftWheelDist)/2;
-
-        // uhol
-        double prevGyro;
-        double gyro = robotdata.GyroAngle/100.00;
-        double gyroRad = (((gyro)*pi)/180.0);
-
-
-
-        //double deltaFi = (rightWheelDist - leftWheelDist) / wheelBase;
-        // double deltaFi = (rightWheelDist - leftWheelDist);
-        // double deltaFi = (deltaEncoderRight - deltaEncoderLeft);
-        //fi += deltaFi;
-        //double fiInRad = fi * (pi / 180.0);
-        //double prevFiInRad= prevFi * (pi/180.0);
-        //fi = atan2(sin(fi), cos(fi));
-
-        //x,y
-        if (fi == 0.00)
-        {
-            xko += deltaDistance * (double) cos(gyroRad);
-            y += deltaDistance * (double) sin(gyroRad);
-        }
-        else
-        {
-            xko += deltaDistance * (double)(sin(gyroRad) - sin(prevGyro*pi/180.00));
-            y -= deltaDistance * (double)(cos(gyroRad) - cos(prevGyro*pi/180.00));
-            //xko += (robotCom.b*(rightWheelDist+leftWheelDist))/(2*(rightWheelDist-leftWheelDist)) * (sin(fi) - sin(prevFi));
-            //y -= (robotCom.b*(rightWheelDist+leftWheelDist))/(2*(rightWheelDist-leftWheelDist)) * (cos(fi) - cos(prevFi));
-        }
-        //prevFi = fi;
-        prevGyro=gyroRad;
-
+        calculateXY(robotdata);
         ///ak nastavite hodnoty priamo do prvkov okna,ako je to na tychto zakomentovanych riadkoch tak sa moze stat ze vam program padne
         // ui->lineEdit_2->setText(QString::number(robotdata.EncoderRight));
         //ui->lineEdit_3->setText(QString::number(robotdata.EncoderLeft));
@@ -174,8 +169,7 @@ int robot::processThisRobot(TKobukiData robotdata)
         /// okno pocuva vo svojom slote a vasu premennu nastavi tak ako chcete. prikaz emit to presne takto spravi
         /// viac o signal slotoch tu: https://doc.qt.io/qt-5/signalsandslots.html
         ///posielame sem nezmysli.. pohrajte sa nech sem idu zmysluplne veci
-        emit publishPosition(xko*100,y*100,gyro);
-        fi=gyro;
+        emit publishPosition(xko*100,y*100,fi);
         //std::cout << x;
         ///toto neodporucam na nejake komplikovane struktury. signal slot robi kopiu dat. radsej vtedy posielajte
         /// prazdny signal a slot bude vykreslovat strukturu (vtedy ju musite mat samozrejme ako member premmennu v mainwindow. ak u niekoho najdem globalnu premennu,tak bude cistit bludisko zubnou kefkou.. kefku dodam)
@@ -198,58 +192,58 @@ int robot::processThisRobot(TKobukiData robotdata)
 
     if (useDirectCommands == 0) {
         if (!waypointQueue.empty()) {
+            double angleDeviationThreshold = 0.2;
+            double distanceDeviationThreshold = 0.5;
+
             std::pair<double, double> targetWaypoint = waypointQueue.front();
             double targetX = targetWaypoint.first;
             double targetY = targetWaypoint.second;
 
             // Calculate desired angle
-            double deltaX = targetX - xko; // xko is your robots x coordinate
-            double deltaY = targetY - y; // y is your robots y coordinate
+            double deltaX = targetX - xko*100;
+            double deltaY = targetY - y*100;
             double desiredAngle = atan2(deltaY, deltaX);
-
             // Calculate angle error
             double angleError = desiredAngle - fi;
-            angleError = atan2(sin(angleError), cos(angleError)); // Normalize
-
-            // Rotation PID
-            double rotationSpeed = rotationPID->update(0, angleError); // Setpoint is 0 error
-
+            angleError = atan2(sin(angleError), cos(angleError));
             // Calculate distance to waypoint
             double distance = sqrt(pow(deltaX, 2) + pow(deltaY, 2));
 
-            // Distance PID
-            double forwardSpeed = distancePID->update(0, distance); // Setpoint is 0 distance
-
-            // Check for angle deviation
-            double angleDeviationThreshold = 0.1; // Example threshold (radians)
-            if (abs(angleError) > angleDeviationThreshold && forwardSpeed > 0.1) {
-                forwardSpeed = 0; // Stop forward movement
+            // angle and distance derivation
+            if(abs(angleError) > angleDeviationThreshold){
+                // Rotation PID
+                forwardspeed = 0.0;
+                rotationspeed = rotationPID->update(0, angleError);
+                std::cout << rotationspeed;
+                std::cout << "\n";
+            }
+            else if((distance > distanceDeviationThreshold)){
+                // Distance PID
+                rotationspeed=0.0;
+                forwardspeed = distancePID->update(0, distance);
+            }
+            if (distance < distanceDeviationThreshold) {
+                waypointQueue.pop_front();
             }
 
             // Apply speeds to robot
-            if (forwardSpeed == 0 && rotationSpeed != 0) {
-                robotCom.setRotationSpeed(rotationSpeed);
-            } else if (forwardSpeed != 0 && rotationSpeed == 0) {
-                robotCom.setTranslationSpeed(forwardSpeed);
-            } else if (forwardSpeed != 0 && rotationSpeed != 0) {
-                robotCom.setArcSpeed(forwardSpeed, forwardSpeed / rotationSpeed);
+            if (forwardspeed == 0 && rotationspeed != 0) {
+                robotCom.setRotationSpeed(rotationspeed);
+            } else if (forwardspeed != 0 && rotationspeed == 0) {
+                robotCom.setTranslationSpeed(forwardspeed);
+            } else if (forwardspeed != 0 && rotationspeed != 0) {
+                robotCom.setArcSpeed(forwardspeed, forwardspeed / rotationspeed);
             } else {
                 robotCom.setTranslationSpeed(0);
             }
 
-            // Check if waypoint reached
-            double waypointReachedThreshold = 0.1; // Example threshold (meters)
-            if (distance < waypointReachedThreshold) {
-                waypointQueue.pop_front();
-            }
-        } else {
-            // No waypoints, stop the robot
+        }
+        else {
             robotCom.setTranslationSpeed(0);
+            robotCom.setRotationSpeed(0);
         }
     }
     datacounter++;
-
-
     return 0;
 
 }
