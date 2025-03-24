@@ -67,6 +67,7 @@ private:
     PIDController *distancePID;
 
     // I MADE THESE - I SUCK AT CPP - IDK
+    bool encodersSetFlag;
     unsigned short previousEncoderRight;
     unsigned short previousEncoderLeft;
     const float wheelDia=0.05;

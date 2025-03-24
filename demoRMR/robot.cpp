@@ -21,15 +21,15 @@ robot::robot(QObject *parent) : QObject(parent)
 void robot::initAndStartRobot(std::string ipaddress)
 {
     // Defining PID gains
-    const double kp_rotation = 0.3;
+    const double kp_rotation = 1;
     const double ki_rotation = 0.01;
     const double kd_rotation = 0.05;
-    const double dt_rotation = 0.01; // where the fuck do i get this from
+    const double dt_rotation = 0.01; // where could i get this from?
 
-    const double kp_distance = 0.10;
+    const double kp_distance = 15;
     const double ki_distance = 0.01;
     const double kd_distance = 0.02;
-    const double dt_distance = 0.01; // where the fuck do i get this from
+    const double dt_distance = 0.01;
 
     xko=0.00;
     y=0.00;
@@ -41,12 +41,16 @@ void robot::initAndStartRobot(std::string ipaddress)
     forwardspeed=0.0;
     rotationspeed=0.0;
 
+    encodersSetFlag=false;
     previousEncoderLeft=0;
     previousEncoderRight=0;
 
     //std::deque<std::pair<double, double>>
-    waypointQueue.emplace_back(80.0, -20.0);
-    waypointQueue.emplace_back(4.0, 70.0);
+    waypointQueue.emplace_back(-5.0,0.0);
+    // waypointQueue.emplace_back(5.0, 0.0);
+    // waypointQueue.emplace_back(40.0, 0.0);
+    // waypointQueue.emplace_back(-5.0, 0.0);
+
 
     rotationPID = new PIDController(kp_rotation, ki_rotation, kd_rotation, dt_rotation, 0.0, 0.0);
     distancePID = new PIDController(kp_distance, ki_distance, kd_distance, dt_distance, 0.0, 0.0);
@@ -68,7 +72,12 @@ void robot::initAndStartRobot(std::string ipaddress)
 }
 
 void robot::calculateXY(TKobukiData robotdata) { // double& xko, double& y
-
+    //should run only after init (I didnt want to modify the inistAndStartRobot method,it would need robotdata as an input
+    if(encodersSetFlag==false){
+        previousEncoderRight = robotdata.EncoderRight;
+        previousEncoderLeft = robotdata.EncoderLeft;
+        encodersSetFlag=true;
+    }
     //distance
     short deltaEncoderRight = (robotdata.EncoderRight) - (previousEncoderRight);
     short deltaEncoderLeft = (robotdata.EncoderLeft) - (previousEncoderLeft);
@@ -192,8 +201,8 @@ int robot::processThisRobot(TKobukiData robotdata)
 
     if (useDirectCommands == 0) {
         if (!waypointQueue.empty()) {
-            double angleDeviationThreshold = 0.2;
-            double distanceDeviationThreshold = 0.5;
+            double angleDeviationThreshold = 0.1; //0.34 degrees
+            double distanceDeviationThreshold = 0.2;
 
             std::pair<double, double> targetWaypoint = waypointQueue.front();
             double targetX = targetWaypoint.first;
@@ -204,24 +213,31 @@ int robot::processThisRobot(TKobukiData robotdata)
             double deltaY = targetY - y*100;
             double desiredAngle = atan2(deltaY, deltaX);
             // Calculate angle error
-            double angleError = desiredAngle - fi;
-            angleError = atan2(sin(angleError), cos(angleError));
+            double angleRN= fi*3.14159265358979323846/180;
+            double angleError = desiredAngle - angleRN ;
+            //angleError = atan2(sin(angleError), cos(angleError));
             // Calculate distance to waypoint
             double distance = sqrt(pow(deltaX, 2) + pow(deltaY, 2));
 
             // angle and distance derivation
+            if((distance > distanceDeviationThreshold)){
+                // Distance PID
+                rotationspeed=0.0;
+                forwardspeed = distancePID->update(0, distance);
+                //std::cout << forwardspeed;
+
+            }
             if(abs(angleError) > angleDeviationThreshold){
                 // Rotation PID
                 forwardspeed = 0.0;
                 rotationspeed = rotationPID->update(0, angleError);
-                std::cout << rotationspeed;
+                std::cout << angleError;
                 std::cout << "\n";
             }
-            else if((distance > distanceDeviationThreshold)){
-                // Distance PID
-                rotationspeed=0.0;
-                forwardspeed = distancePID->update(0, distance);
-            }
+
+
+            // min 0,
+
             if (distance < distanceDeviationThreshold) {
                 waypointQueue.pop_front();
             }
