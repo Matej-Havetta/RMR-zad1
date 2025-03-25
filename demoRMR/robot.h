@@ -70,6 +70,8 @@ private:
     bool encodersSetFlag;
     unsigned short previousEncoderRight;
     unsigned short previousEncoderLeft;
+    int angleRefiner=2;
+
     const float wheelDia=0.05;
     const float wheelBase=0.32;
 

@@ -2,8 +2,9 @@
 #include <math.h>
 
 // PID controller class
-PIDController::PIDController (double p, double i, double d, double dt, double integral, double prev_error) :
-        Kp(p), Ki(i), Kd(d), dt(dt), integral(integral), prev_error(0.0) {}
+PIDController::PIDController (double p, double i, double d, double dt, double step, double prev_output) :
+        Kp(p), Ki(i), Kd(d), dt(dt), step(step), prev_output(prev_output) {}
+
 
 double PIDController::update(double setpoint, double measured_value) {
         // // Calculate the error
@@ -22,8 +23,15 @@ double PIDController::update(double setpoint, double measured_value) {
         //integral += error;
         //double derivative = error - prev_error;
         double output = Kp * error; //+ Ki * integral; // + Kd * derivative;
-        prev_error = error;
-
+        if(output>prev_output+step){
+            output = prev_output+step;
+        }
+        prev_output=output;
         return output;
     }
+
+
+void PIDController::setPrevOut(double new_prev) {
+    prev_output = new_prev;
+}
 

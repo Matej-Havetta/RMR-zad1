@@ -21,12 +21,14 @@ robot::robot(QObject *parent) : QObject(parent)
 void robot::initAndStartRobot(std::string ipaddress)
 {
     // Defining PID gains
-    const double kp_rotation = 1;
+    const double kp_rotation = 3;
+    // const double kp_rotation = 0.9;
     const double ki_rotation = 0.01;
     const double kd_rotation = 0.05;
     const double dt_rotation = 0.01; // where could i get this from?
 
-    const double kp_distance = 10;
+    // const double kp_distance = 10;
+    const double kp_distance = 20;
     const double ki_distance = 0.01;
     const double kd_distance = 0.02;
     const double dt_distance = 0.01;
@@ -48,14 +50,14 @@ void robot::initAndStartRobot(std::string ipaddress)
     //std::deque<std::pair<double, double>>
     // waypointQueue.emplace_back(-5.0,0.0);
     // waypointQueue.emplace_back(40.0, 5.0);
-    waypointQueue.emplace_back(-4.0, 1.0);
-    waypointQueue.emplace_back(8.0, 340.0);
+    waypointQueue.emplace_back(275, 0.0);
+    // waypointQueue.emplace_back(8.0, 340.0);
     waypointQueue.emplace_back(0.0, 0.0);
 
 
 
-    rotationPID = new PIDController(kp_rotation, ki_rotation, kd_rotation, dt_rotation, 0.0, 0.0);
-    distancePID = new PIDController(kp_distance, ki_distance, kd_distance, dt_distance, 0.0, 0.0);
+    rotationPID = new PIDController(kp_rotation, ki_rotation, kd_rotation, dt_rotation, 0.03, 0.1);
+    distancePID = new PIDController(kp_distance, ki_distance, kd_distance, dt_distance, 10, 1);
 
     ///setovanie veci na komunikaciu s robotom/lidarom/kamerou.. su tam adresa porty a callback.. laser ma ze sa da dat callback aj ako lambda.
     /// lambdy su super, setria miesto a ak su rozumnej dlzky,tak aj prehladnost... ak ste o nich nic nepoculi poradte sa s vasim doktorom alebo lekarnikom...
@@ -78,6 +80,7 @@ void robot::calculateXY(TKobukiData robotdata) { // double& xko, double& y
     if(encodersSetFlag==false){
         previousEncoderRight = robotdata.EncoderRight;
         previousEncoderLeft = robotdata.EncoderLeft;
+        prevGyro=robotdata.GyroAngle/100.00;
         encodersSetFlag=true;
     }
 
@@ -105,7 +108,7 @@ void robot::calculateXY(TKobukiData robotdata) { // double& xko, double& y
 
     // uhol
     //double prevGyro;
-    double gyro = robotdata.GyroAngle/100.00;
+    double gyro = robotdata.GyroAngle/100.00 - prevGyro;
     double gyroRad = (((gyro)*pi)/180.0);
     //double deltaFi = (rightWheelDist - leftWheelDist) / wheelBase;
     // double deltaFi = (rightWheelDist - leftWheelDist);
@@ -116,20 +119,20 @@ void robot::calculateXY(TKobukiData robotdata) { // double& xko, double& y
     //fi = atan2(sin(fi), cos(fi));
 
     //x,y
-    if (prevGyro == gyroRad)
+   // if (prevGyro == gyroRad)
     {
         xko += deltaDistance * (double) cos(gyroRad);
         y += deltaDistance * (double) sin(gyroRad);
     }
-    else
+   /* else
     {
         // xko += deltaDistance * (double)(sin(gyroRad) - sin(prevGyro*pi/180.00));
         // y -= deltaDistance * (double)(cos(gyroRad) - cos(prevGyro*pi/180.00));
         xko += deltaDistance * (double)(sin(gyroRad)- sin(prevGyro));
         y -= deltaDistance * (double)(cos(gyroRad) -  cos(prevGyro));
-    }
+    }*/
     //prevFi = fi;
-    prevGyro=gyroRad;
+    //prevGyro=gyroRad;
     fi=gyro;
 }
 
@@ -175,6 +178,7 @@ void robot::setSpeed(double forw, double rots)
 int robot::processThisRobot(TKobukiData robotdata)
 {
     ///tu mozete robit s datami z robota
+    calculateXY(robotdata);
 
 
 
@@ -183,7 +187,6 @@ int robot::processThisRobot(TKobukiData robotdata)
     ///kazdy piaty krat, aby to ui moc nepreblikavalo..
     if(datacounter%5==0)
     {
-        calculateXY(robotdata);
         ///ak nastavite hodnoty priamo do prvkov okna,ako je to na tychto zakomentovanych riadkoch tak sa moze stat ze vam program padne
         // ui->lineEdit_2->setText(QString::number(robotdata.EncoderRight));
         //ui->lineEdit_3->setText(QString::number(robotdata.EncoderLeft));
@@ -197,8 +200,7 @@ int robot::processThisRobot(TKobukiData robotdata)
         ///toto neodporucam na nejake komplikovane struktury. signal slot robi kopiu dat. radsej vtedy posielajte
         /// prazdny signal a slot bude vykreslovat strukturu (vtedy ju musite mat samozrejme ako member premmennu v mainwindow. ak u niekoho najdem globalnu premennu,tak bude cistit bludisko zubnou kefkou.. kefku dodam)
         /// vtedy ale odporucam pouzit mutex, aby sa vam nestalo ze budete pocas vypisovania prepisovat niekde inde
-
-
+    }
     ///---tu sa posielaju rychlosti do robota... vklude zakomentujte ak si chcete spravit svoje
     // if(useDirectCommands==0)
     // {
@@ -213,70 +215,90 @@ int robot::processThisRobot(TKobukiData robotdata)
     // }
     // datacounter++;
 
-        if (useDirectCommands == 0) {
-            if (!waypointQueue.empty()) {
-                double angleDeviationThreshold = 0.06; //0.34 degrees
-                double distanceDeviationThreshold = 0.1;
+    if (useDirectCommands == 0) {
+        if (!waypointQueue.empty()) {
+            double angleDeviationThreshold = 0.1; //5.7 degrees
+            double distanceDeviationThreshold = 0.1;
 
-                std::pair<double, double> targetWaypoint = waypointQueue.front();
-                double targetX = targetWaypoint.first;
-                double targetY = targetWaypoint.second;
+            std::pair<double, double> targetWaypoint = waypointQueue.front();
+            double targetX = targetWaypoint.first;
+            double targetY = targetWaypoint.second;
 
-                // Calculate desired angle
-                double deltaX = targetX - xko*100;
-                double deltaY = targetY - y*100;
-                double desiredAngle = atan2(deltaY, deltaX);
-                // Calculate angle error
-                double angleRN= fi*3.14159265358979323846/180;
-                double angleError = desiredAngle - angleRN ;
-                angleError = atan2(sin(angleError), cos(angleError));
-                // Calculate distance to waypoint
-                double distance = sqrt(pow(deltaX, 2) + pow(deltaY, 2));
+            // Calculate desired angle
+            double deltaX = targetX - xko*100;
+            double deltaY = targetY - y*100;
+            double desiredAngle = atan2(deltaY, deltaX);
+            // Calculate angle error
+            double angleRN= fi*3.14159265358979323846/180;
+            double angleError = desiredAngle - angleRN ;
+            angleError = atan2(sin(angleError), cos(angleError));
+            // Calculate distance to waypoint
+            double distance = sqrt(pow(deltaX, 2) + pow(deltaY, 2));
 
-                // angle and distance derivation
-                if((distance > distanceDeviationThreshold)){
-                    // Distance PID
-                    rotationspeed=0.0;
-                    forwardspeed = distancePID->update(0, distance);
-                    //std::cout << forwardspeed;
+            // angle and distance derivation
+            if((distance > distanceDeviationThreshold)){
+                // Distance PID
+                rotationspeed=0.0;
+                forwardspeed = distancePID->update(0, distance);
 
+                if(forwardspeed<15){
+                    forwardspeed=25;
                 }
-                if(abs(angleError) > angleDeviationThreshold){
-                    // Rotation PID
-                    forwardspeed = 0.0;
-                    rotationspeed = rotationPID->update(0, angleError);
-                    std::cout << angleError;
-                    std::cout << "\n";
-                }
-
-
-                // min 0,
-
-                if (distance < distanceDeviationThreshold) {
-                    waypointQueue.pop_front();
-                }
-
-                // Apply speeds to robot
-                if (forwardspeed == 0 && rotationspeed != 0) {
-                    robotCom.setRotationSpeed(rotationspeed);
-                } else if (forwardspeed != 0 && rotationspeed == 0) {
-                    robotCom.setTranslationSpeed(forwardspeed);
-                } else if (forwardspeed != 0 && rotationspeed != 0) {
-                    robotCom.setArcSpeed(forwardspeed, forwardspeed / rotationspeed);
-                } else {
-                    robotCom.setTranslationSpeed(0);
-                }
+                 if(forwardspeed>200){
+                     forwardspeed=200;
+                 }
+                //std::cout << forwardspeed;
 
             }
-            else {
+            if(abs(angleError) > angleDeviationThreshold*angleRefiner){
+                // Rotation PID
+                forwardspeed = 0.0;
+                rotationspeed = rotationPID->update(0, angleError);
+                angleRefiner =1;
+                distancePID->setPrevOut(0.0);
+                // if(rotationspeed<=0.5){
+                //     rotationspeed=1;
+                // }
+                // if(rotationspeed>2){
+                //     rotationspeed=2;
+                // }
+                //std::cout << angleError;
+                //std::cout << "\n";
+            }
+            else{
+                angleRefiner =2;
+                rotationPID->setPrevOut(0.0);
+
+            }
+            if (distance < distanceDeviationThreshold) {
+                waypointQueue.pop_front();
+                std::cout << "POINT REACHED" ;
+            }
+
+            std::cout << "rot: " ;
+            std::cout << rotationspeed ;
+            std::cout << " trans: " ;
+            std::cout << forwardspeed ;
+            std::cout << "\n" ;
+
+            // Apply speeds to robot
+            if (forwardspeed == 0 && rotationspeed != 0) {
+                robotCom.setRotationSpeed(rotationspeed);
+            } else if (forwardspeed != 0 && rotationspeed == 0) {
+                robotCom.setTranslationSpeed(forwardspeed);
+            } else if (forwardspeed != 0 && rotationspeed != 0) {
+                robotCom.setArcSpeed(forwardspeed, forwardspeed / rotationspeed);
+            } else {
                 robotCom.setTranslationSpeed(0);
-                robotCom.setRotationSpeed(0);
             }
+        }
+        else {
+            robotCom.setTranslationSpeed(0);
+            robotCom.setRotationSpeed(0);
         }
     }
     datacounter++;
     return 0;
-
 }
 
 ///toto je calback na data z lidaru, ktory ste podhodili robotu vo funkcii initAndStartRobot
