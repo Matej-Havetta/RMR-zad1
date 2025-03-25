@@ -48,7 +48,7 @@ void robot::initAndStartRobot(std::string ipaddress)
     //std::deque<std::pair<double, double>>
     waypointQueue.emplace_back(-5.0,0.0);
     // waypointQueue.emplace_back(5.0, 0.0);
-    // waypointQueue.emplace_back(40.0, 0.0);
+    waypointQueue.emplace_back(40.0, 5.0);
     // waypointQueue.emplace_back(-5.0, 0.0);
 
 
@@ -202,7 +202,7 @@ int robot::processThisRobot(TKobukiData robotdata)
     if (useDirectCommands == 0) {
         if (!waypointQueue.empty()) {
             double angleDeviationThreshold = 0.1; //0.34 degrees
-            double distanceDeviationThreshold = 0.2;
+            double distanceDeviationThreshold = 0.1;
 
             std::pair<double, double> targetWaypoint = waypointQueue.front();
             double targetX = targetWaypoint.first;
@@ -215,7 +215,7 @@ int robot::processThisRobot(TKobukiData robotdata)
             // Calculate angle error
             double angleRN= fi*3.14159265358979323846/180;
             double angleError = desiredAngle - angleRN ;
-            //angleError = atan2(sin(angleError), cos(angleError));
+            angleError = atan2(sin(angleError), cos(angleError));
             // Calculate distance to waypoint
             double distance = sqrt(pow(deltaX, 2) + pow(deltaY, 2));
 
