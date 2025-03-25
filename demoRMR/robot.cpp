@@ -26,7 +26,7 @@ void robot::initAndStartRobot(std::string ipaddress)
     const double kd_rotation = 0.05;
     const double dt_rotation = 0.01; // where could i get this from?
 
-    const double kp_distance = 15;
+    const double kp_distance = 10;
     const double ki_distance = 0.01;
     const double kd_distance = 0.02;
     const double dt_distance = 0.01;
@@ -46,10 +46,12 @@ void robot::initAndStartRobot(std::string ipaddress)
     previousEncoderRight=0;
 
     //std::deque<std::pair<double, double>>
-    waypointQueue.emplace_back(-5.0,0.0);
-    // waypointQueue.emplace_back(5.0, 0.0);
-    waypointQueue.emplace_back(40.0, 5.0);
-    // waypointQueue.emplace_back(-5.0, 0.0);
+    // waypointQueue.emplace_back(-5.0,0.0);
+    // waypointQueue.emplace_back(40.0, 5.0);
+    waypointQueue.emplace_back(-4.0, 1.0);
+    waypointQueue.emplace_back(8.0, 340.0);
+    waypointQueue.emplace_back(0.0, 0.0);
+
 
 
     rotationPID = new PIDController(kp_rotation, ki_rotation, kd_rotation, dt_rotation, 0.0, 0.0);
@@ -78,9 +80,21 @@ void robot::calculateXY(TKobukiData robotdata) { // double& xko, double& y
         previousEncoderLeft = robotdata.EncoderLeft;
         encodersSetFlag=true;
     }
+
     //distance
     short deltaEncoderRight = (robotdata.EncoderRight) - (previousEncoderRight);
     short deltaEncoderLeft = (robotdata.EncoderLeft) - (previousEncoderLeft);
+    // handle unsigned short overflow
+    int uShortLimit=65535;
+    int half = uShortLimit / 2;
+    if (deltaEncoderLeft > half)
+        deltaEncoderLeft -= uShortLimit + 1;
+    if (deltaEncoderLeft < -half)
+        deltaEncoderLeft += uShortLimit + 1;
+    if (deltaEncoderRight > half)
+        deltaEncoderRight -= uShortLimit + 1;
+    if (deltaEncoderRight < -half)
+        deltaEncoderRight += uShortLimit + 1;
     // update encoders
     previousEncoderRight = robotdata.EncoderRight;
     previousEncoderLeft = robotdata.EncoderLeft;
@@ -111,7 +125,7 @@ void robot::calculateXY(TKobukiData robotdata) { // double& xko, double& y
     {
         // xko += deltaDistance * (double)(sin(gyroRad) - sin(prevGyro*pi/180.00));
         // y -= deltaDistance * (double)(cos(gyroRad) - cos(prevGyro*pi/180.00));
-        xko += deltaDistance * (double)(sin(gyroRad) - sin(prevGyro));
+        xko += deltaDistance * (double)(sin(gyroRad)- sin(prevGyro));
         y -= deltaDistance * (double)(cos(gyroRad) -  cos(prevGyro));
     }
     //prevFi = fi;
@@ -184,7 +198,7 @@ int robot::processThisRobot(TKobukiData robotdata)
         /// prazdny signal a slot bude vykreslovat strukturu (vtedy ju musite mat samozrejme ako member premmennu v mainwindow. ak u niekoho najdem globalnu premennu,tak bude cistit bludisko zubnou kefkou.. kefku dodam)
         /// vtedy ale odporucam pouzit mutex, aby sa vam nestalo ze budete pocas vypisovania prepisovat niekde inde
 
-    }
+
     ///---tu sa posielaju rychlosti do robota... vklude zakomentujte ak si chcete spravit svoje
     // if(useDirectCommands==0)
     // {
@@ -199,64 +213,65 @@ int robot::processThisRobot(TKobukiData robotdata)
     // }
     // datacounter++;
 
-    if (useDirectCommands == 0) {
-        if (!waypointQueue.empty()) {
-            double angleDeviationThreshold = 0.1; //0.34 degrees
-            double distanceDeviationThreshold = 0.1;
+        if (useDirectCommands == 0) {
+            if (!waypointQueue.empty()) {
+                double angleDeviationThreshold = 0.06; //0.34 degrees
+                double distanceDeviationThreshold = 0.1;
 
-            std::pair<double, double> targetWaypoint = waypointQueue.front();
-            double targetX = targetWaypoint.first;
-            double targetY = targetWaypoint.second;
+                std::pair<double, double> targetWaypoint = waypointQueue.front();
+                double targetX = targetWaypoint.first;
+                double targetY = targetWaypoint.second;
 
-            // Calculate desired angle
-            double deltaX = targetX - xko*100;
-            double deltaY = targetY - y*100;
-            double desiredAngle = atan2(deltaY, deltaX);
-            // Calculate angle error
-            double angleRN= fi*3.14159265358979323846/180;
-            double angleError = desiredAngle - angleRN ;
-            angleError = atan2(sin(angleError), cos(angleError));
-            // Calculate distance to waypoint
-            double distance = sqrt(pow(deltaX, 2) + pow(deltaY, 2));
+                // Calculate desired angle
+                double deltaX = targetX - xko*100;
+                double deltaY = targetY - y*100;
+                double desiredAngle = atan2(deltaY, deltaX);
+                // Calculate angle error
+                double angleRN= fi*3.14159265358979323846/180;
+                double angleError = desiredAngle - angleRN ;
+                angleError = atan2(sin(angleError), cos(angleError));
+                // Calculate distance to waypoint
+                double distance = sqrt(pow(deltaX, 2) + pow(deltaY, 2));
 
-            // angle and distance derivation
-            if((distance > distanceDeviationThreshold)){
-                // Distance PID
-                rotationspeed=0.0;
-                forwardspeed = distancePID->update(0, distance);
-                //std::cout << forwardspeed;
+                // angle and distance derivation
+                if((distance > distanceDeviationThreshold)){
+                    // Distance PID
+                    rotationspeed=0.0;
+                    forwardspeed = distancePID->update(0, distance);
+                    //std::cout << forwardspeed;
+
+                }
+                if(abs(angleError) > angleDeviationThreshold){
+                    // Rotation PID
+                    forwardspeed = 0.0;
+                    rotationspeed = rotationPID->update(0, angleError);
+                    std::cout << angleError;
+                    std::cout << "\n";
+                }
+
+
+                // min 0,
+
+                if (distance < distanceDeviationThreshold) {
+                    waypointQueue.pop_front();
+                }
+
+                // Apply speeds to robot
+                if (forwardspeed == 0 && rotationspeed != 0) {
+                    robotCom.setRotationSpeed(rotationspeed);
+                } else if (forwardspeed != 0 && rotationspeed == 0) {
+                    robotCom.setTranslationSpeed(forwardspeed);
+                } else if (forwardspeed != 0 && rotationspeed != 0) {
+                    robotCom.setArcSpeed(forwardspeed, forwardspeed / rotationspeed);
+                } else {
+                    robotCom.setTranslationSpeed(0);
+                }
 
             }
-            if(abs(angleError) > angleDeviationThreshold){
-                // Rotation PID
-                forwardspeed = 0.0;
-                rotationspeed = rotationPID->update(0, angleError);
-                std::cout << angleError;
-                std::cout << "\n";
-            }
-
-
-            // min 0,
-
-            if (distance < distanceDeviationThreshold) {
-                waypointQueue.pop_front();
-            }
-
-            // Apply speeds to robot
-            if (forwardspeed == 0 && rotationspeed != 0) {
-                robotCom.setRotationSpeed(rotationspeed);
-            } else if (forwardspeed != 0 && rotationspeed == 0) {
-                robotCom.setTranslationSpeed(forwardspeed);
-            } else if (forwardspeed != 0 && rotationspeed != 0) {
-                robotCom.setArcSpeed(forwardspeed, forwardspeed / rotationspeed);
-            } else {
+            else {
                 robotCom.setTranslationSpeed(0);
+                robotCom.setRotationSpeed(0);
             }
-
-        }
-        else {
-            robotCom.setTranslationSpeed(0);
-            robotCom.setRotationSpeed(0);
         }
     }
     datacounter++;
