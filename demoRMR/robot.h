@@ -15,6 +15,7 @@
 #include "opencv2/videoio.hpp"
 #include "opencv2/imgcodecs.hpp"
 #include <cmath>
+#include <stdio>
 
 Q_DECLARE_METATYPE(cv::Mat)
 #endif
@@ -30,6 +31,7 @@ public:
 
     void initAndStartRobot(std::string ipaddress);
     void calculateXY(TKobukiData robotdata);
+    std::vector<std::vector<int>> updateMap(LaserMeasurement laserMeasurement);
     //tato funkcia len nastavuje hodnoty.. posielaju sa v callbacku(dobre, kvoli asynchronnosti a zabezpeceniu,ze sa poslu len raz pri viacero prepisoch vramci callu)
     void setSpeedVal(double forw,double rots);
     //tato funkcia fyzicky posiela hodnoty do robota
@@ -53,27 +55,29 @@ private:
 /// toto su rychlosti ktore sa nastavuju setSpeedVal a posielaju v processThisRobot
     double forwardspeed;//mm/s
     double rotationspeed;//omega/s
-    // idk if i can use these to obtain the velocity from setSpeed so I made my own
-    // plus idk the correct type hehe
+    const float wheelDia=0.05;
+    const float wheelBase=0.32;
     double currentForwardSpeed;
     double currentRotationSpeed;
     double prevFi;
     double gyroStart;
     double prevGyro;
-
-    ///waypoints and controllers
-    std::deque<std::pair<double, double>> waypointQueue;
-    PIDController *rotationPID;
-    PIDController *distancePID;
-
-    // I MADE THESE - I SUCK AT CPP - IDK
-    bool encodersSetFlag;
     unsigned short previousEncoderRight;
     unsigned short previousEncoderLeft;
+
+    ///waypoints
+    std::deque<std::pair<double, double>> waypointQueue;
+
+    ///controllers
+    PIDController *rotationPID;
+    PIDController *distancePID;
+    bool encodersSetFlag;
     int angleRefiner=2;
 
-    const float wheelDia=0.05;
-    const float wheelBase=0.32;
+    ///map
+    // the size of the map is 120x120 which means, eachunit represents 10cmx10cm, valid values are: -1 (UNKNOWN), 0 (FREE), -1 (OCCUPIED), map is initialized with values -1
+    const int gridSize = 120;
+    std::vector<std::vector<int>> map;
 
     ///toto su callbacky co sa sa volaju s novymi datami
     int processThisLidar(LaserMeasurement laserData);

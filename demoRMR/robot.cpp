@@ -4,6 +4,7 @@
 //here i am fighting for PI
 #define _USE_MATH_DEFINES
 #include <cmath>
+#include <vector>
 const double pi = 3.14159265358979323846;
 
 
@@ -21,17 +22,14 @@ robot::robot(QObject *parent) : QObject(parent)
 void robot::initAndStartRobot(std::string ipaddress)
 {
     // Defining PID gains
-    const double kp_rotation = 3;
-    // const double kp_rotation = 0.9;
+    const double kp_rotation = 3; //real
     const double ki_rotation = 0.01;
     const double kd_rotation = 0.05;
-    const double dt_rotation = 0.01; // where could i get this from?
 
-    // const double kp_distance = 10;
-    const double kp_distance = 20;
+    // const double kp_distance = 10; //for faster simulation
+    const double kp_distance = 20; //real
     const double ki_distance = 0.01;
     const double kd_distance = 0.02;
-    const double dt_distance = 0.01;
 
     xko=0.00;
     y=0.00;
@@ -47,17 +45,18 @@ void robot::initAndStartRobot(std::string ipaddress)
     previousEncoderLeft=0;
     previousEncoderRight=0;
 
-    //std::deque<std::pair<double, double>>
-    // waypointQueue.emplace_back(-5.0,0.0);
-    // waypointQueue.emplace_back(40.0, 5.0);
-    waypointQueue.emplace_back(275, 0.0);
-    // waypointQueue.emplace_back(8.0, 340.0);
-    waypointQueue.emplace_back(0.0, 0.0);
 
+    // simulation
+    waypointQueue.emplace_back(-5.0,0.0);
+    waypointQueue.emplace_back(40.0, 5.0);
+    // real
+    // waypointQueue.emplace_back(275, 0.0);
+    // waypointQueue.emplace_back(0.0, 0.0);
 
+    rotationPID = new PIDController(kp_rotation, ki_rotation, kd_rotation, 0.03, 0.1);
+    distancePID = new PIDController(kp_distance, ki_distance, kd_distance, 10, 1);
 
-    rotationPID = new PIDController(kp_rotation, ki_rotation, kd_rotation, dt_rotation, 0.03, 0.1);
-    distancePID = new PIDController(kp_distance, ki_distance, kd_distance, dt_distance, 10, 1);
+    map = std::vector<std::vector<int>>(gridSize, std::vector<int>(gridSize, -1));
 
     ///setovanie veci na komunikaciu s robotom/lidarom/kamerou.. su tam adresa porty a callback.. laser ma ze sa da dat callback aj ako lambda.
     /// lambdy su super, setria miesto a ak su rozumnej dlzky,tak aj prehladnost... ak ste o nich nic nepoculi poradte sa s vasim doktorom alebo lekarnikom...
@@ -83,7 +82,6 @@ void robot::calculateXY(TKobukiData robotdata) { // double& xko, double& y
         prevGyro=robotdata.GyroAngle/100.00;
         encodersSetFlag=true;
     }
-
     //distance
     short deltaEncoderRight = (robotdata.EncoderRight) - (previousEncoderRight);
     short deltaEncoderLeft = (robotdata.EncoderLeft) - (previousEncoderLeft);
@@ -135,6 +133,30 @@ void robot::calculateXY(TKobukiData robotdata) { // double& xko, double& y
     //prevGyro=gyroRad;
     fi=gyro;
 }
+std::vector<std::vector<int>> robot::updateMap(LaserMeasurement laserMeasurement){
+    const double scale = 10.0;
+    const double offsetX = gridSize / 2.0;
+    const double offsetY = gridSize / 2.0;
+
+    for (int i = 0; i < min(laserMeasurement.numberOfScans, 276); ++i) {
+        float angle = laserMeasurement.Data[i].scanAngle;
+        float distance = laserMeasurement.Data[i].scanDistance;
+
+        if (distance > 0.0) {
+            double x = distance * cos(angle);
+            double y = distance * sin(angle);
+
+            int gridX = static_cast<int>(x * scale + offsetX);
+            int gridY = static_cast<int>(y * scale + offsetY);
+
+            if (gridX >= 0 && gridX < gridSize && gridY >= 0 && gridY < gridSize) {
+                map[gridY][gridX] = 1;
+            }
+        }
+    }
+    return map;
+}
+
 
 void robot::setSpeedVal(double forw, double rots)
 {
@@ -179,8 +201,7 @@ int robot::processThisRobot(TKobukiData robotdata)
 {
     ///tu mozete robit s datami z robota
     calculateXY(robotdata);
-
-
+    map = updateMap(copyOfLaserData);
 
 ///TU PISTE KOD... TOTO JE TO MIESTO KED NEVIETE KDE ZACAT,TAK JE TO NAOZAJ TU. AK AJ TAK NEVIETE, SPYTAJTE SA CVICIACEHO MA TU NATO STRING KTORY DA DO HLADANIA XXX
 
@@ -196,24 +217,24 @@ int robot::processThisRobot(TKobukiData robotdata)
         /// viac o signal slotoch tu: https://doc.qt.io/qt-5/signalsandslots.html
         ///posielame sem nezmysli.. pohrajte sa nech sem idu zmysluplne veci
         emit publishPosition(xko*100,y*100,fi);
-        //std::cout << x;
+        // std::cout << x;
         ///toto neodporucam na nejake komplikovane struktury. signal slot robi kopiu dat. radsej vtedy posielajte
         /// prazdny signal a slot bude vykreslovat strukturu (vtedy ju musite mat samozrejme ako member premmennu v mainwindow. ak u niekoho najdem globalnu premennu,tak bude cistit bludisko zubnou kefkou.. kefku dodam)
         /// vtedy ale odporucam pouzit mutex, aby sa vam nestalo ze budete pocas vypisovania prepisovat niekde inde
     }
     ///---tu sa posielaju rychlosti do robota... vklude zakomentujte ak si chcete spravit svoje
-    // if(useDirectCommands==0)
-    // {
-    //     if(forwardspeed==0 && rotationspeed!=0)
-    //         robotCom.setRotationSpeed(rotationspeed);
-    //     else if(forwardspeed!=0 && rotationspeed==0)
-    //         robotCom.setTranslationSpeed(forwardspeed);
-    //     else if((forwardspeed!=0 && rotationspeed!=0))
-    //         robotCom.setArcSpeed(forwardspeed,forwardspeed/rotationspeed);
-    //     else
-    //         robotCom.setTranslationSpeed(0);
-    // }
-    // datacounter++;
+    /*if(useDirectCommands==0)
+    {
+        if(forwardspeed==0 && rotationspeed!=0)
+            robotCom.setRotationSpeed(rotationspeed);
+        else if(forwardspeed!=0 && rotationspeed==0)
+            robotCom.setTranslationSpeed(forwardspeed);
+        else if((forwardspeed!=0 && rotationspeed!=0))
+            robotCom.setArcSpeed(forwardspeed,forwardspeed/rotationspeed);
+        else
+            robotCom.setTranslationSpeed(0);
+    }
+    datacounter++;*/
 
     if (useDirectCommands == 0) {
         if (!waypointQueue.empty()) {
@@ -247,7 +268,6 @@ int robot::processThisRobot(TKobukiData robotdata)
                  if(forwardspeed>200){
                      forwardspeed=200;
                  }
-                //std::cout << forwardspeed;
 
             }
             if(abs(angleError) > angleDeviationThreshold*angleRefiner){
@@ -256,14 +276,6 @@ int robot::processThisRobot(TKobukiData robotdata)
                 rotationspeed = rotationPID->update(0, angleError);
                 angleRefiner =1;
                 distancePID->setPrevOut(0.0);
-                // if(rotationspeed<=0.5){
-                //     rotationspeed=1;
-                // }
-                // if(rotationspeed>2){
-                //     rotationspeed=2;
-                // }
-                //std::cout << angleError;
-                //std::cout << "\n";
             }
             else{
                 angleRefiner =2;
@@ -274,12 +286,6 @@ int robot::processThisRobot(TKobukiData robotdata)
                 waypointQueue.pop_front();
                 std::cout << "POINT REACHED" ;
             }
-
-            std::cout << "rot: " ;
-            std::cout << rotationspeed ;
-            std::cout << " trans: " ;
-            std::cout << forwardspeed ;
-            std::cout << "\n" ;
 
             // Apply speeds to robot
             if (forwardspeed == 0 && rotationspeed != 0) {
@@ -311,6 +317,15 @@ int robot::processThisLidar(LaserMeasurement laserData)
     //tu mozete robit s datami z lidaru.. napriklad najst prekazky, zapisat do mapy. naplanovat ako sa prekazke vyhnut.
     // ale nic vypoctovo narocne - to iste vlakno ktore cita data z lidaru
    // updateLaserPicture=1;
+    // std::cout << "\n";
+    // std::cout << laserData.Data[0].scanAngle;
+    // std::cout << "\n";
+    // std::cout << laserData.Data[1].scanAngle;
+    // std::cout << "\n";
+    // std::cout << laserData.Data[2].scanAngle;
+    // std::cout << "\n";
+    // std::cout << laserData.Data[200].scanAngle;
+
     emit publishLidar(copyOfLaserData);
    // update();//tento prikaz prinuti prekreslit obrazovku.. zavola sa paintEvent funkcia
 

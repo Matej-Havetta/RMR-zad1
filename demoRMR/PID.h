@@ -8,12 +8,11 @@ private:
     double Kp;
     double Ki;
     double Kd;
-    double dt;
     double step;
     double prev_output;
 
 public:
-    PIDController(double p, double i, double d, double dt, double step, double prev_output);
+    PIDController(double p, double i, double d, double step, double prev_output);
     double update(double setpoint, double measured_value);
     void setStep(double step);
     void setPrevOut(double new_prev);
