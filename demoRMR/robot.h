@@ -29,6 +29,7 @@ class robot : public QObject
 public:
     explicit robot(QObject *parent = nullptr);
 
+    void saveMap();
     void initAndStartRobot(std::string ipaddress);
     void calculateXY(TKobukiData robotdata);
     std::vector<std::vector<int>> updateMap(LaserMeasurement laserMeasurement);

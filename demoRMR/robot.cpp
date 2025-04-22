@@ -150,11 +150,48 @@ std::vector<std::vector<int>> robot::updateMap(LaserMeasurement laserMeasurement
             int gridY = static_cast<int>(y * scale + offsetY);
 
             if (gridX >= 0 && gridX < gridSize && gridY >= 0 && gridY < gridSize) {
-                map[gridY][gridX] = 1;
+                map[gridY][gridX] = 0;
             }
         }
     }
+    cout << "mapUpdated" << endl;
     return map;
+}
+
+void robot::saveMap()
+{
+    cout << "nova mapa" << endl;
+
+    std::ofstream outfile("C:\\Users\\mahav\\Documents\\QtDesignStudio\\Zad1\\RMR-zad1\\mapa.txt");
+
+    // Write the array contents to the file
+    for (int i = 0; i < gridSize; i++){
+        //cout << "pad1" << endl;
+        for (int j = 0; j < gridSize; j++){
+            //cout << "pad2" << endl;
+            // if(map[i][j] == 1){
+            //     cout << "pad3" << endl;
+            //     //                outfile << ' ' << " ";
+            //     //outfile << 1;
+            //     //                outfile << i << j;
+            // }
+            // else{
+            //     //                outfile << '*' << " ";
+            //     //outfile << " ";
+            //     //                           outfile << i << j;
+            //     cout << "pad4" << endl;
+            // }
+            cout << map[i][j];
+
+        }
+    }
+
+    // Close the output file
+    outfile.close();
+
+    cout<<"zapisal som"<<endl;
+
+
 }
 
 
