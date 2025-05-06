@@ -42,7 +42,7 @@ public:
     void calculateXY(TKobukiData robotdata);
     std::vector<std::vector<int>> updateMap(LaserMeasurement laserMeasurement, double xko, double yko, double fi);
     void drawMap(std::vector<std::vector<int>> map);
-    RobotPose interpolatePose(unsigned int timestamp);
+    RobotPose interpolatePose(unsigned int timestamp,int &prevIndex);
     //tato funkcia len nastavuje hodnoty.. posielaju sa v callbacku(dobre, kvoli asynchronnosti a zabezpeceniu,ze sa poslu len raz pri viacero prepisoch vramci callu)
     void setSpeedVal(double forw,double rots);
     //tato funkcia fyzicky posiela hodnoty do robota
@@ -88,8 +88,7 @@ private:
 
     ///map
     // the size of the map is 120x120 which means, eachunit represents 10cmx10cm, valid values are: -1 (UNKNOWN), 0 (FREE), -1 (OCCUPIED), map is initialized with values -1
-    const int gridSize = 120;
-    //const int numberOfSqareInMap = 120;
+    const int gridSize = 150;
     std::vector<std::vector<int>> map;
 
     ///toto su callbacky co sa sa volaju s novymi datami

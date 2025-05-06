@@ -138,7 +138,7 @@ void MainWindow::on_pushButton_9_clicked() //start button
     connect(
                 instance, &QJoysticks::axisChanged,
                 [this]( const int js, const int axis, const qreal value) {
-        double forw=0, rot=0;
+        static double forw=0, rot=0;
         if(/*js==0 &&*/ axis==1){forw=-value*300;}
         if(/*js==0 &&*/ axis==0){rot=-value*(3.14159/2.0);}
         this->_robot.setSpeedVal(forw,rot);

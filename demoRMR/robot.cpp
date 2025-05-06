@@ -175,23 +175,31 @@ std::vector<std::vector<int>> robot::updateMap(LaserMeasurement laserMeasurement
     const double scale = 0.1; //0.01; // what????
     const double offsetX = gridSize / 2.0;
     const double offsetY = gridSize / 2.0;
+    static int prevIt=1;
     double robotRads = ((fi*pi)/180.0); // converting it to rads (((gyro)*pi)/180.0);
     for (int i = 0; i < laserMeasurement.numberOfScans; i++) {
         // clockwise float angle = (360 - laserMeasurement.Data[i].scanAngle) * pi / 180.0;
-        float angle = laserMeasurement.Data[i].scanAngle * pi / 180.0;
+        float angle = -laserMeasurement.Data[i].scanAngle * pi / 180.0;
         float distance = laserMeasurement.Data[i].scanDistance / 10.0; // [cm]
         unsigned int pointTimestamp = laserMeasurement.Data[i].timestamp;
-        RobotPose pose = interpolatePose(pointTimestamp);
+        RobotPose pose = interpolatePose(pointTimestamp,prevIt);
         if (distance > 15 && distance <=300 && !(distance >= 64 && distance <= 70)) {
             // Convert polar to Cartesian in robot frame
-            double localX = distance * cos(angle);
-            double localY = distance * sin(angle);
-            double robotX = xko * 100;
-            double robotY = yko * 100;
+            // double localX = distance * cos(angle);
+            // double localY = distance * sin(angle);
+            //double robotX = xko * 100;
+            //double robotY = yko * 100;
 
             // Transform to global coordinates
-            double globalX = pose.x * 100 + localX * cos(pose.angle) - localY * sin(pose.angle);
-            double globalY = pose.y * 100 + localX * sin(pose.angle) + localY * cos(pose.angle);
+            // double globalX = pose.x * 100 + localX * co5s(pose.angle) - localY * sin(pose.angle);
+            // double globalY = pose.y * 100 + localX * sin(pose.angle) + localY * cos(pose.angle);
+            // double globalX = pose.x * 100 + localX + cos(pose.angle);
+            // double globalY = pose.y * 100 + localY + sin(pose.angle);
+            double globalX = pose.x + distance * cos(angle + pose.angle);
+            double globalY = pose.y + distance * sin(angle + pose.angle);
+
+            //         int gridX = static_cast<int>(x * scale + offsetX);
+            //         int gridY = static_cast<int>(y * scale + offsetY);
 
             // Map to grid
             int gridX = static_cast<int>(globalX * scale + offsetX);
@@ -382,8 +390,11 @@ int robot::processThisRobot(TKobukiData robotdata)
 /// vola sa ked dojdu nove data z lidaru
 int robot::processThisLidar(LaserMeasurement laserData)
 {
-    memcpy( &copyOfLaserData,&laserData,sizeof(LaserMeasurement));
+    static int init=0;
+    if(init==1)
     map = updateMap(copyOfLaserData, xko, y, fi);
+    init=1;
+    memcpy( &copyOfLaserData,&laserData,sizeof(LaserMeasurement));
     drawMap(map);
 
     //robotdata.synctimestamp;
@@ -408,27 +419,32 @@ int robot::processThisLidar(LaserMeasurement laserData)
 
 }
 
-robot::RobotPose robot::interpolatePose(unsigned int timestamp) {
+robot::RobotPose robot::interpolatePose(unsigned int timestamp,int &prevIndex) {
     if (poseHistory.empty()) {
+        prevIndex=1;
         return RobotPose(0, 0.0, 0.0, 0.0);
     }
-    if (poseHistory.size() < 2) return poseHistory.back();
-    for (size_t i = 1; i < poseHistory.size(); ++i) {
+    if (poseHistory.size() < 2){
+        prevIndex=1;
+        return poseHistory.back();
+    }
+    for (size_t i = prevIndex; i < poseHistory.size(); ++i) {
         RobotPose& before = poseHistory[i - 1];
         RobotPose& after = poseHistory[i];
         if (before.timestamp <= timestamp && timestamp <= after.timestamp) {
+            prevIndex=i;
             double ratio = (timestamp - before.timestamp) / double(after.timestamp - before.timestamp);
 
-            double x = before.x + ratio * (after.x - before.x);
-            double y = before.y + ratio * (after.y - before.y);
+            double x = before.x*100 + ratio * (after.x - before.x);
+            double y = before.y*100 + ratio * (after.y - before.y);
 
-            // Interpolating angle properly (handles wrap-around)
             double angleDiff = atan2(sin(after.angle - before.angle), cos(after.angle - before.angle));
             double angle = before.angle + ratio * angleDiff;
 
             return {timestamp, x, y, angle};
         }
     }
+    prevIndex=1;
     return poseHistory.back();
 }
 
