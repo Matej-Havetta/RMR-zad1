@@ -26,17 +26,34 @@ Q_DECLARE_METATYPE(LaserMeasurement)
 class robot : public QObject
 {
     Q_OBJECT
+    struct RobotPose {
+        unsigned int timestamp;  // microseconds
+        double x;
+        double y;
+        double angle; // radians
+        RobotPose(unsigned int ts, double x_, double y_, double angle_)
+            : timestamp(ts), x(x_), y(y_), angle(angle_) {}
+    };
+
 public:
     explicit robot(QObject *parent = nullptr);
 
-    void saveMap();
     void initAndStartRobot(std::string ipaddress);
     void calculateXY(TKobukiData robotdata);
-    std::vector<std::vector<int>> updateMap(LaserMeasurement laserMeasurement);
+    std::vector<std::vector<int>> updateMap(LaserMeasurement laserMeasurement, double xko, double yko, double fi);
+    void drawMap(std::vector<std::vector<int>> map);
+    RobotPose interpolatePose(unsigned int timestamp);
     //tato funkcia len nastavuje hodnoty.. posielaju sa v callbacku(dobre, kvoli asynchronnosti a zabezpeceniu,ze sa poslu len raz pri viacero prepisoch vramci callu)
     void setSpeedVal(double forw,double rots);
     //tato funkcia fyzicky posiela hodnoty do robota
     void setSpeed(double forw,double rots);
+    void wall(LaserMeasurement laserData);
+    bool isObstacleAhead(const LaserMeasurement& laserData, float thresholdDistance);
+    bool isObstacleAround(const LaserMeasurement& laserData, float thresholdDistance);
+    bool isEmptyRight(const LaserMeasurement& laserData, float thresholdDistance);
+    float getRightWallDistance(const LaserMeasurement& laserData);
+    bool isObstacleInPath(const LaserMeasurement& laserData, float thresholdDistance);
+    bool isPathToGoalClear(const LaserMeasurement& laserData, float angleToGoal, float requiredDistance);
 signals:
     void publishPosition(double x, double y, double z);
     void publishLidar(const LaserMeasurement &lidata);
@@ -47,11 +64,11 @@ signals:
 void publishSkeleton(const skeleton &skeledata);
 #endif
 private:
-
     /// toto su vase premenne na vasu odometriu
     double xko;
     double y;
     double fi;
+
 ///-----------------------------
 /// toto su rychlosti ktore sa nastavuju setSpeedVal a posielaju v processThisRobot
     double forwardspeed;//mm/s
@@ -65,9 +82,11 @@ private:
     double prevGyro;
     unsigned short previousEncoderRight;
     unsigned short previousEncoderLeft;
+    bool isWallCrawling;
 
     ///waypoints
     std::deque<std::pair<double, double>> waypointQueue;
+    std::deque<RobotPose> poseHistory; // store last N seconds
 
     ///controllers
     PIDController *rotationPID;
@@ -78,6 +97,7 @@ private:
     ///map
     // the size of the map is 120x120 which means, eachunit represents 10cmx10cm, valid values are: -1 (UNKNOWN), 0 (FREE), -1 (OCCUPIED), map is initialized with values -1
     const int gridSize = 120;
+    //const int numberOfSqareInMap = 120;
     std::vector<std::vector<int>> map;
 
     ///toto su callbacky co sa sa volaju s novymi datami

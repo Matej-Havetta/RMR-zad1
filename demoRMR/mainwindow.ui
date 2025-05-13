@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>793</width>
-    <height>651</height>
+    <width>788</width>
+    <height>614</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -183,13 +183,6 @@
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="pushButton_10">
-        <property name="text">
-         <string>Save Map</string>
-        </property>
-       </widget>
-      </item>
-      <item>
        <spacer name="verticalSpacer">
         <property name="orientation">
          <enum>Qt::Vertical</enum>
@@ -300,8 +293,8 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>793</width>
-     <height>25</height>
+     <width>788</width>
+     <height>21</height>
     </rect>
    </property>
   </widget>
