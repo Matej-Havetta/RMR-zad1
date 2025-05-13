@@ -54,15 +54,15 @@ void robot::initAndStartRobot(std::string ipaddress)
     // waypointQueue.emplace_back(0, 0);
 
     //goals
-    goalsQueue.emplace_back(Cella{-5,10});
-    goalsQueue.emplace_back(Cella{-50,100});
+    goalsQueue.emplace_back(Cella{140,220});
 
 
     rotationPID = new PIDController(kp_rotation, ki_rotation, kd_rotation, 0.03, 0.1);
     distancePID = new PIDController(kp_distance, ki_distance, kd_distance, 10, 1);
 
     map = std::vector<std::vector<int>>(gridSize, std::vector<int>(gridSize, 0));
-    costMap = std::vector<std::vector<int>>(gridSize, std::vector<int>(gridSize, 0));
+    //costMap = std::vector<std::vector<int>>(gridSize, std::vector<int>(gridSize, 0));
+    costMap = readMapFromFile("C://Users//szdor//Desktop//I-RK//SEM8//RMR//mapa1_DONE.txt");
 
     ///setovanie veci na komunikaciu s robotom/lidarom/kamerou.. su tam adresa porty a callback.. laser ma ze sa da dat callback aj ako lambda.
     /// lambdy su super, setria miesto a ak su rozumnej dlzky,tak aj prehladnost... ak ste o nich nic nepoculi poradte sa s vasim doktorom alebo lekarnikom...
@@ -173,16 +173,23 @@ std::vector<std::vector<int>> robot::updateMap(LaserMeasurement laserMeasurement
 
 std::vector<std::vector<int>> robot::updateCostMapFloodFill(Cella goal, Cella start)
 {
+    if (costMap.empty() || costMap[0].empty())
+    {
+        std::cerr << "Map is empty!\n";
+        return {};
+    }
     const double scale = 0.1; //cm
     const double offsetX = gridSize / 2.0;
     const double offsetY = gridSize / 2.0;
-    int rows = map.size();
-    int cols = map[0].size();
+    int rows = costMap.size();
+    int cols = costMap[0].size();
 
-    std::vector<std::vector<int>> newCostMap = map;
+    std::vector<std::vector<int>> newCostMap = costMap;
     int gridGoalX = static_cast<int>(goal.x * scale + offsetX);
     int gridGoalY = static_cast<int>(goal.y * scale + offsetY);
     Cella gridGoal = {gridGoalX, gridGoalY};
+    if(newCostMap.size()!=rows)
+        std::cout<<"pruser"<<std::endl;
     if (gridGoalX < 0 || gridGoalY < 0 || gridGoalX >= cols || gridGoalY >= rows || map[gridGoalY][gridGoalX] == -1) {
         std::cerr << "Invalid goal for flood fill\n";
         return costMap ;
@@ -212,18 +219,14 @@ std::vector<std::vector<int>> robot::updateCostMapFloodFill(Cella goal, Cella st
 
             // Check bounds
             if (nx >= 0 && ny >= 0 && nx < cols && ny < rows) {
-                // Only spread to free cells that haven't been visited
-                if (map[ny][nx] == 0 && newCostMap[ny][nx] == 0) { //obstacle is -2
+                if (newCostMap[ny][nx] == 0) { //obstacle is -2
                     newCostMap[ny][nx] = currentCost + 1;
                     queue.push_back({nx, ny});
-                } else if (map[ny][nx] == -1) {
+                }
+                else if (map[ny][nx] == -1) {
+                    checkpointVect.push_back(goal);
                     return newCostMap;
                 }
-                if(map[ny][nx] == -1){
-                    //checkpointVect.push_back(goal);
-                    return newCostMap;
-                }
-
             }
         }
         //checkpointVect.push_back(queue.back());
@@ -231,6 +234,101 @@ std::vector<std::vector<int>> robot::updateCostMapFloodFill(Cella goal, Cella st
     }
     std::cout << "Cost map updated from goal (" << goal.x << ", " << goal.y << ")\n";
     return newCostMap;
+}
+
+std::vector<robot::Cella> robot::extractPathFromCostMap(Cella start) { // const std::vector<std::vector<int>>& costMap
+    std::vector<Cella> path;
+    const double scale = 0.1; //cm
+    const double offsetX = gridSize / 2.0;
+    const double offsetY = gridSize / 2.0;
+    // Convert to grid coordinates if needed
+    int gridStartX = static_cast<int>(start.x * 0.1 + gridSize / 2.0);
+    int gridStartY = static_cast<int>(start.y * 0.1 + gridSize / 2.0);
+    Cella current;
+    current.x = gridStartX;
+    current.y = gridStartY;
+
+    int rows = static_cast<int>(costMap.size());
+    int cols = static_cast<int>(costMap[0].size());
+
+    if (current.x < 0 || current.y < 0 || current.x >= cols || current.y >= rows)
+        return path;
+
+    //path.push_back(current);
+    int currentCost = costMap[current.y][current.x];
+
+    std::vector<std::pair<int, int>> directions;
+    directions.push_back(std::make_pair(1, 0));
+    directions.push_back(std::make_pair(-1, 0));
+    directions.push_back(std::make_pair(0, 1));
+    directions.push_back(std::make_pair(0, -1));
+
+    while (currentCost > 2) {
+        int minCost = INT_MAX;
+        Cella nextCell = current;
+
+        for (int i = 0; i < static_cast<int>(directions.size()); i++) {
+            int dx = directions[i].first;
+            int dy = directions[i].second;
+
+            int nx = current.x + dx;
+            int ny = current.y + dy;
+
+            if (nx >= 0 && ny >= 0 && nx < cols && ny < rows) {
+                int neighborCost = costMap[ny][nx];
+                if (neighborCost >= 2 && neighborCost < minCost) {
+                    minCost = neighborCost;
+                    nextCell = {nx, ny};
+                }
+            }
+        }
+
+        if (minCost < currentCost) {
+            current = nextCell;
+            currentCost = minCost;
+            int globX = static_cast<int>((current.x - offsetX) / scale);
+            int globY = static_cast<int>((current.y - offsetY) / scale);
+            Cella globalCurrent = {globX, globY};
+            path.push_back(globalCurrent);
+        } else {
+            std::cerr << "Backtracking failed. Could not find a neighbor with lower cost.\n";
+            return std::vector<Cella>();  // return empty path
+        }
+    }
+    // while (currentCost > 2) {
+    //     bool found = false;
+    //     for (int i = 0; i < static_cast<int>(directions.size()); i++) {
+    //         int dx = directions[i].first;
+    //         int dy = directions[i].second;
+
+    //         int nx = current.x + dx;
+    //         int ny = current.y + dy;
+
+    //         if (nx >= 0 && ny >= 0 && nx < cols && ny < rows) {
+    //             if (costMap[ny][nx] == currentCost - 1) {
+    //                 current.x = nx;
+    //                 current.y = ny;
+    //                 currentCost--;
+    //                 int globX = (current.x / scale - offsetX);
+    //                 int globY = (current.y / scale - offsetY);
+    //                 Cella globalCurrent=Cella({globX,globY});
+    //                 //path.push_back(current);
+    //                 path.push_back(globalCurrent);
+    //                 found = true;
+    //                 break;
+    //             }
+    //         }
+    //     }
+
+    //     if (!found) {
+    //         std::cerr << "Backtracking failed. Could not find a neighbor with lower cost.\n";
+    //         return std::vector<Cella>();  // return empty path
+    //     }
+    // }
+
+    // Optionally reverse if you want from goal → start
+    //std::reverse(path.begin(), path.end());
+    return path;
 }
 
 void robot::drawMap(std::vector<std::vector<int>> map){
@@ -342,19 +440,25 @@ int robot::processThisRobot(TKobukiData robotdata)
             int robotCellY = y;
             Cella start = Cella({robotCellX,robotCellY});
             costMap = updateCostMapFloodFill(currentGoal, start);
+            drawCostMap(costMap);
             // backtrackPath(robotCellX, robotCellY);
-            //replanNeeded = false;
+            replanNeeded = false;
+            std::vector<Cella> checkpoints = extractPathFromCostMap(start);
+            std::vector<Cella> zlomoveBody = findZlomoveBody(checkpoints);
+            waypointQueue=checkpoints;
+            std::cout << "idk";
         }
     }
     ///---tu sa posielaju rychlosti do robota... vklude zakomentujte ak si chcete spravit svoje
     if (useDirectCommands == 0) {
+        //waypointQueue = path;
         if (!waypointQueue.empty()) {
             double angleDeviationThreshold = 0.1; //5.7 degrees
             double distanceDeviationThreshold = 0.1;
 
-            std::pair<double, double> targetWaypoint = waypointQueue.front();
-            double targetX = targetWaypoint.first;
-            double targetY = targetWaypoint.second;
+            Cella targetWaypoint = waypointQueue.front();
+            double targetX = targetWaypoint.x;
+            double targetY = targetWaypoint.y;
 
             // Calculate desired angle
             double deltaX = targetX - xko*100;
@@ -394,7 +498,8 @@ int robot::processThisRobot(TKobukiData robotdata)
 
             }
             if (distance < distanceDeviationThreshold) {
-                waypointQueue.pop_front();
+                //waypointQueue.pop_front();
+                waypointQueue.erase(waypointQueue.begin());
                 std::cout << "POINT REACHED" ;
             }
 
@@ -466,6 +571,70 @@ robot::RobotPose robot::interpolatePose(unsigned int timestamp,int &prevIndex) {
     }
     prevIndex=1;
     return poseHistory.back();
+}
+
+std::vector<std::vector<int>> robot::readMapFromFile(const std::string& filename) {
+    std::ifstream file(filename);
+    std::vector<std::vector<int>> map;
+
+    if (!file.is_open()) {
+        std::cerr << "Failed to open map file: " << filename << std::endl;
+        return map;
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.size() < 150) continue; // Skip malformed lines if necessary
+
+        std::vector<int> row;
+        for (char c : line) {
+            switch (c) {
+            case ' ': row.push_back(0); break;     // Free space
+            case '1': row.push_back(-2); break;     // Wall or obstacle
+            //case '-': row.push_back(-1); break;    // Special marker
+            default:
+                row.push_back(0); // Or handle error
+                break;
+            }
+        }
+        map.push_back(row);
+    }
+
+    file.close();
+    return map;
+}
+
+std::vector<robot::Cella> robot::findZlomoveBody(const std::vector<Cella>& path) {
+    std::vector<Cella> zlomoveBody;
+
+    if (path.size() < 2) {
+        return path; // No turning points possible
+    }
+
+    // Always include the first point
+    zlomoveBody.push_back(path.front());
+
+    // Previous direction
+    int dxPrev = path[1].x - path[0].x;
+    int dyPrev = path[1].y - path[0].y;
+
+    for (size_t i = 2; i < path.size(); ++i) {
+        int dx = path[i].x - path[i - 1].x;
+        int dy = path[i].y - path[i - 1].y;
+
+        // If direction changed, it's a turning point
+        if (dx != dxPrev || dy != dyPrev) {
+            zlomoveBody.push_back(path[i - 1]); // Add turning point
+        }
+
+        dxPrev = dx;
+        dyPrev = dy;
+    }
+
+    // Always include the last point
+    zlomoveBody.push_back(path.back());
+
+    return zlomoveBody;
 }
 
 

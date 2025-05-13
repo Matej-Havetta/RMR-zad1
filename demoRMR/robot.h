@@ -46,7 +46,10 @@ public:
     void calculateXY(TKobukiData robotdata);
     std::vector<std::vector<int>> updateMap(LaserMeasurement laserMeasurement, double xko, double yko, double fi);
     std::vector<std::vector<int>> updateCostMap();
+    std::vector<std::vector<int>> readMapFromFile(const std::string& filename);
     std::vector<std::vector<int>> updateCostMapFloodFill(Cella goal, Cella start);
+    std::vector<robot::Cella> findZlomoveBody(const std::vector<Cella>& path);
+    std::vector<Cella> extractPathFromCostMap(Cella start); //const std::vector<std::vector<int>>& costMap
     void drawMap(std::vector<std::vector<int>> map);
     void drawCostMap(std::vector<std::vector<int>> map);
     RobotPose interpolatePose(unsigned int timestamp,int &prevIndex);
@@ -84,7 +87,8 @@ private:
     unsigned short previousEncoderLeft;
 
     ///waypoints
-    std::deque<std::pair<double, double>> waypointQueue;
+    //std::deque<std::pair<double, double>> waypointQueue;
+    std::vector<Cella> waypointQueue;
     std::deque<Cella> goalsQueue;
     std::deque<RobotPose> poseHistory; // store last N seconds
 
