@@ -173,10 +173,6 @@ std::vector<std::vector<int>> robot::updateMap(LaserMeasurement laserMeasurement
 
 std::vector<std::vector<int>> robot::updateCostMapFloodFill(Cella goal, Cella start)
 {
-    if (map.empty() || map[0].empty()) {
-        std::cerr << "Map is empty!\n";
-        return {};
-    }
     const double scale = 0.1; //cm
     const double offsetX = gridSize / 2.0;
     const double offsetY = gridSize / 2.0;
@@ -207,10 +203,6 @@ std::vector<std::vector<int>> robot::updateCostMapFloodFill(Cella goal, Cella st
         int x = currentCell.x;
         int y = currentCell.y;
         queue.pop_front();
-        if(y>149 || x>149){
-            std::cout << y;
-            std::cout << x;
-        }
         int currentCost = newCostMap[y][x];
         for (const std::pair<int, int>& dir : directions) {
             int dx = dir.first;
@@ -219,9 +211,7 @@ std::vector<std::vector<int>> robot::updateCostMapFloodFill(Cella goal, Cella st
             int ny = y + dy;
 
             // Check bounds
-            // if (nx >= 0 && ny >= 0 && nx < cols
-            if (ny >= 0 && ny < map.size()) {
-                if (nx >= 0 && nx < map[ny].size()) {
+            if (nx >= 0 && ny >= 0 && nx < cols && ny < rows) {
                 // Only spread to free cells that haven't been visited
                 if (map[ny][nx] == 0 && newCostMap[ny][nx] == 0) { //obstacle is -2
                     newCostMap[ny][nx] = currentCost + 1;
@@ -229,14 +219,11 @@ std::vector<std::vector<int>> robot::updateCostMapFloodFill(Cella goal, Cella st
                 } else if (map[ny][nx] == -1) {
                     return newCostMap;
                 }
-                // if(map[ny][nx] == -1){
-                //     //checkpointVect.push_back(goal);
-                //     return newCostMap;
-                // }
+                if(map[ny][nx] == -1){
+                    //checkpointVect.push_back(goal);
+                    return newCostMap;
+                }
 
-            }
-            else {
-                std::cerr << "Invalid access at (" << nx << ", " << ny << ")\n";
             }
         }
         //checkpointVect.push_back(queue.back());
