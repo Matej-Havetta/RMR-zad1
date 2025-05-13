@@ -34,6 +34,10 @@ class robot : public QObject
         RobotPose(unsigned int ts, double x_, double y_, double angle_)
             : timestamp(ts), x(x_), y(y_), angle(angle_) {}
     };
+    struct Cella {
+        int x;
+        int y;
+    };
 
 public:
     explicit robot(QObject *parent = nullptr);
@@ -41,7 +45,10 @@ public:
     void initAndStartRobot(std::string ipaddress);
     void calculateXY(TKobukiData robotdata);
     std::vector<std::vector<int>> updateMap(LaserMeasurement laserMeasurement, double xko, double yko, double fi);
+    std::vector<std::vector<int>> updateCostMap();
+    std::vector<std::vector<int>> updateCostMapFloodFill(Cella goal, Cella start);
     void drawMap(std::vector<std::vector<int>> map);
+    void drawCostMap(std::vector<std::vector<int>> map);
     RobotPose interpolatePose(unsigned int timestamp,int &prevIndex);
     //tato funkcia len nastavuje hodnoty.. posielaju sa v callbacku(dobre, kvoli asynchronnosti a zabezpeceniu,ze sa poslu len raz pri viacero prepisoch vramci callu)
     void setSpeedVal(double forw,double rots);
@@ -78,6 +85,7 @@ private:
 
     ///waypoints
     std::deque<std::pair<double, double>> waypointQueue;
+    std::deque<Cella> goalsQueue;
     std::deque<RobotPose> poseHistory; // store last N seconds
 
     ///controllers
@@ -88,8 +96,12 @@ private:
 
     ///map
     // the size of the map is 120x120 which means, eachunit represents 10cmx10cm, valid values are: -1 (UNKNOWN), 0 (FREE), -1 (OCCUPIED), map is initialized with values -1
+    bool goalIsSet = false;
+    bool replanNeeded = false;
+    Cella currentGoal;
     const int gridSize = 150;
     std::vector<std::vector<int>> map;
+    std::vector<std::vector<int>> costMap;
 
     ///toto su callbacky co sa sa volaju s novymi datami
     int processThisLidar(LaserMeasurement laserData);
