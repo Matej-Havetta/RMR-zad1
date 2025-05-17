@@ -18,7 +18,7 @@ MainWindow::MainWindow(QWidget *parent) :
 {
 
     //tu je napevno nastavena ip. treba zmenit na to co ste si zadali do text boxu alebo nejaku inu pevnu. co bude spravna
-    //ipaddress="192.168.1.12"; //192.168.1.11toto je na niektory realny robot.. na lokal budete davat "127.0.0.1"
+    // ipaddress="192.168.1.14"; //192.168.1.11toto je na niektory realny robot.. na lokal budete davat "127.0.0.1"
     ipaddress="127.0.0.1";
 
     ui->setupUi(this);
@@ -138,7 +138,7 @@ void MainWindow::on_pushButton_9_clicked() //start button
     connect(
                 instance, &QJoysticks::axisChanged,
                 [this]( const int js, const int axis, const qreal value) {
-        double forw=0, rot=0;
+        static double forw=0, rot=0;
         if(/*js==0 &&*/ axis==1){forw=-value*300;}
         if(/*js==0 &&*/ axis==0){rot=-value*(3.14159/2.0);}
         this->_robot.setSpeedVal(forw,rot);

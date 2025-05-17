@@ -45,20 +45,24 @@ void robot::initAndStartRobot(std::string ipaddress)
     previousEncoderLeft=0;
     previousEncoderRight=0;
 
-    isWallCrawling = false;
 
     // simulation
     // waypointQueue.emplace_back(-5.0,0.0);
-    waypointQueue.emplace_back(250.0, 0.0);
-    //waypointQueue.emplace_back(287.0, -50.0);
+    // waypointQueue.emplace_back(40, 5);
     // real
-    // waypointQueue.emplace_back(275, 0.0);
-    // waypointQueue.emplace_back(0.0, 0.0);
+    // waypointQueue.emplace_back(275, 0);
+    // waypointQueue.emplace_back(0, 0);
+
+    //goals
+    goalsQueue.emplace_back(Cella{-5,10});
+    goalsQueue.emplace_back(Cella{-50,100});
+
 
     rotationPID = new PIDController(kp_rotation, ki_rotation, kd_rotation, 0.03, 0.1);
     distancePID = new PIDController(kp_distance, ki_distance, kd_distance, 10, 1);
 
-    map = std::vector<std::vector<int>>(gridSize, std::vector<int>(gridSize, -1));
+    map = std::vector<std::vector<int>>(gridSize, std::vector<int>(gridSize, 0));
+    costMap = std::vector<std::vector<int>>(gridSize, std::vector<int>(gridSize, 0));
 
     ///setovanie veci na komunikaciu s robotom/lidarom/kamerou.. su tam adresa porty a callback.. laser ma ze sa da dat callback aj ako lambda.
     /// lambdy su super, setria miesto a ak su rozumnej dlzky,tak aj prehladnost... ak ste o nich nic nepoculi poradte sa s vasim doktorom alebo lekarnikom...
@@ -135,103 +139,136 @@ void robot::calculateXY(TKobukiData robotdata) { // double& xko, double& y
     //prevGyro=gyroRad;
     fi=gyro;
     poseHistory.emplace_back(robotdata.synctimestamp, xko, y, gyroRad);
-
-
 }
 
-//this works for forward backwards movements
-// std::vector<std::vector<int>> robot::updateMap(LaserMeasurement laserMeasurement, double xko, double yko, double fi){
-//     const double scale = 0.1; //0.01; // what????
-//     const double offsetX = gridSize / 2.0;
-//     const double offsetY = gridSize / 2.0;
-
-//     double robotRads = ((fi*pi)/180.0); // converting it to rads (((gyro)*pi)/180.0);
-
-//     for (int i = 0; i < (laserMeasurement.numberOfScans); ++i) {
-//         // float angle = laserMeasurement.Data[i].scanAngle;
-//         float angle = (360-laserMeasurement.Data[i].scanAngle)*pi/180.0; // [rads]
-//         float distance = laserMeasurement.Data[i].scanDistance/10.0; // [cm]
-//                     // [cm]   [cm]
-//         double x = xko*100 + distance * cos(angle + robotRads);
-//         double y = yko*100 + distance * sin(angle + robotRads);
-
-//         int gridX = static_cast<int>(x * scale + offsetX);
-//         int gridY = static_cast<int>(y * scale + offsetY);
-
-//         if (distance > 15 && distance <=300 && !(distance >= 64 && distance <= 70)) {
-//             if (gridX >= 0 && gridX < gridSize && gridY >= 0 && gridY < gridSize) {
-//                 map[gridY][gridX] = 1;
-//             }
-//             else{
-//                 map[gridY][gridX] = 0;
-//             }
-//             // std::cout << map[gridY][gridX];
-//         }
-//         else{
-//             map[gridY][gridX]=0;
-//         }
-//     }
-//     return map;
-// }
 std::vector<std::vector<int>> robot::updateMap(LaserMeasurement laserMeasurement, double xko, double yko, double fi){
-    const double scale = 0.1; //0.01; // what????
+    const double scale = 0.1; //cm
     const double offsetX = gridSize / 2.0;
     const double offsetY = gridSize / 2.0;
+    static int prevIt=1;
     double robotRads = ((fi*pi)/180.0); // converting it to rads (((gyro)*pi)/180.0);
     for (int i = 0; i < laserMeasurement.numberOfScans; i++) {
         // clockwise float angle = (360 - laserMeasurement.Data[i].scanAngle) * pi / 180.0;
-        float angle = laserMeasurement.Data[i].scanAngle * pi / 180.0;
+        float angle = -laserMeasurement.Data[i].scanAngle * pi / 180.0;
         float distance = laserMeasurement.Data[i].scanDistance / 10.0; // [cm]
         unsigned int pointTimestamp = laserMeasurement.Data[i].timestamp;
-        RobotPose pose = interpolatePose(pointTimestamp);
+        RobotPose pose = interpolatePose(pointTimestamp,prevIt);
         if (distance > 15 && distance <=300 && !(distance >= 64 && distance <= 70)) {
-            // Convert polar to Cartesian in robot frame
-            double localX = distance * cos(angle);
-            double localY = distance * sin(angle);
-            double robotX = xko * 100;
-            double robotY = yko * 100;
 
             // Transform to global coordinates
-            double globalX = pose.x * 100 + localX * cos(pose.angle) - localY * sin(pose.angle);
-            double globalY = pose.y * 100 + localX * sin(pose.angle) + localY * cos(pose.angle);
+            double globalX = pose.x + distance * cos(angle + pose.angle);
+            double globalY = pose.y + distance * sin(angle + pose.angle);
 
             // Map to grid
             int gridX = static_cast<int>(globalX * scale + offsetX);
             int gridY = static_cast<int>(globalY * scale + offsetY);
 
             if (gridX >= 0 && gridX < gridSize && gridY >= 0 && gridY < gridSize) {
-                map[gridX][gridY] = 1;
+                map[gridX][gridY] = -2;
             }
         }
     }
     return map;
  }
 
+std::vector<std::vector<int>> robot::updateCostMapFloodFill(Cella goal, Cella start)
+{
+    const double scale = 0.1; //cm
+    const double offsetX = gridSize / 2.0;
+    const double offsetY = gridSize / 2.0;
+    int rows = map.size();
+    int cols = map[0].size();
+
+    std::vector<std::vector<int>> newCostMap = map;
+    int gridGoalX = static_cast<int>(goal.x * scale + offsetX);
+    int gridGoalY = static_cast<int>(goal.y * scale + offsetY);
+    Cella gridGoal = {gridGoalX, gridGoalY};
+    if (gridGoalX < 0 || gridGoalY < 0 || gridGoalX >= cols || gridGoalY >= rows || map[gridGoalY][gridGoalX] == -1) {
+        std::cerr << "Invalid goal for flood fill\n";
+        return costMap ;
+    }
+    std::vector<Cella> checkpointVect;
+    std::deque<Cella> queue;
+    queue.push_back(gridGoal); //    queue.push_back({gridGoalX,gridGoalY});
+    newCostMap[gridGoalY][gridGoalX] = 2;  // Start cost
+
+    // Directions: 4-connected neighbors (you can expand to 8 if you want diagonals)
+    const std::vector<std::pair<int, int>> directions = {
+        {1, 0}, {-1, 0}, {0, 1}, {0, -1}
+    };
+
+    while (!queue.empty()) {
+        Cella currentCell = queue.front();
+        //int x = static_cast<int>(currentCell.x * scale + offsetX);        int y = static_cast<int>(currentCell.y * scale + offsetY);
+        int x = currentCell.x;
+        int y = currentCell.y;
+        queue.pop_front();
+        int currentCost = newCostMap[y][x];
+        for (const std::pair<int, int>& dir : directions) {
+            int dx = dir.first;
+            int dy = dir.second;
+            int nx = x + dx;
+            int ny = y + dy;
+
+            // Check bounds
+            if (nx >= 0 && ny >= 0 && nx < cols && ny < rows) {
+                // Only spread to free cells that haven't been visited
+                if (map[ny][nx] == 0 && newCostMap[ny][nx] == 0) { //obstacle is -2
+                    newCostMap[ny][nx] = currentCost + 1;
+                    queue.push_back({nx, ny});
+                } else if (map[ny][nx] == -1) {
+                    return newCostMap;
+                }
+                if(map[ny][nx] == -1){
+                    //checkpointVect.push_back(goal);
+                    return newCostMap;
+                }
+
+            }
+        }
+        //checkpointVect.push_back(queue.back());
+        currentCost++;
+    }
+    std::cout << "Cost map updated from goal (" << goal.x << ", " << goal.y << ")\n";
+    return newCostMap;
+}
+
 void robot::drawMap(std::vector<std::vector<int>> map){
     std::ofstream outfile("C:\\Users\\szdor\\Desktop\\I-RK\\SEM8\\RMR\\mapa2.txt");
     for (int i = gridSize-1; i >= 0; i--) {
         for (int j = 0; j < gridSize; j++) {
             if(map[i][j] == 0){
-                outfile << " ";
+                outfile << "0";
             }
             else if( map[i][j]==-1){
-                outfile << ' ';
+                outfile << "-1";
             }
-            else if(map[i][j]==1){
-                outfile << 1;
+            else if(map[i][j]==-2){
+                outfile << "-2";
             }
             else{
                 cout << "WHAT THE JSS FCK";
-                cout << endl;
             }
         }
         cout << endl;
         outfile << std::endl;
     }
     outfile.close();
-    //cout<<"zapisal som"<<endl;
+    cout<<"zapisal som"<<endl;
 }
 
+void robot::drawCostMap(std::vector<std::vector<int>> map){
+    std::ofstream outfile("C:\\Users\\szdor\\Desktop\\I-RK\\SEM8\\RMR\\costMap.txt");
+    for (int i = gridSize-1; i >= 0; i--) {
+        for (int j = 0; j < gridSize; j++) {
+                outfile << map[i][j];
+        }
+        cout << endl;
+        outfile << std::endl;
+    }
+    outfile.close();
+    cout<<"zapisal som costmap"<<endl;
+}
 
 void robot::setSpeedVal(double forw, double rots)
 {
@@ -276,9 +313,13 @@ int robot::processThisRobot(TKobukiData robotdata)
 {
     ///tu mozete robit s datami z robota
     calculateXY(robotdata);
-
+    if (!goalIsSet && !goalsQueue.empty()) {
+        currentGoal = goalsQueue.front();
+        goalsQueue.pop_front();
+        goalIsSet = true;
+        replanNeeded = true;
+    }
 ///TU PISTE KOD... TOTO JE TO MIESTO KED NEVIETE KDE ZACAT,TAK JE TO NAOZAJ TU. AK AJ TAK NEVIETE, SPYTAJTE SA CVICIACEHO MA TU NATO STRING KTORY DA DO HLADANIA XXX
-
     ///kazdy piaty krat, aby to ui moc nepreblikavalo..
     if(datacounter%5==0)
     {
@@ -291,152 +332,29 @@ int robot::processThisRobot(TKobukiData robotdata)
         /// viac o signal slotoch tu: https://doc.qt.io/qt-5/signalsandslots.html
         ///posielame sem nezmysli.. pohrajte sa nech sem idu zmysluplne veci
         emit publishPosition(xko*100,y*100,fi);
-        // std::cout << x;
         ///toto neodporucam na nejake komplikovane struktury. signal slot robi kopiu dat. radsej vtedy posielajte
         /// prazdny signal a slot bude vykreslovat strukturu (vtedy ju musite mat samozrejme ako member premmennu v mainwindow. ak u niekoho najdem globalnu premennu,tak bude cistit bludisko zubnou kefkou.. kefku dodam)
         /// vtedy ale odporucam pouzit mutex, aby sa vam nestalo ze budete pocas vypisovania prepisovat niekde inde
     }
+    if(datacounter%20==0){
+        if (goalIsSet && replanNeeded) {
+            int robotCellX = xko;
+            int robotCellY = y;
+            Cella start = Cella({robotCellX,robotCellY});
+            costMap = updateCostMapFloodFill(currentGoal, start);
+            // backtrackPath(robotCellX, robotCellY);
+            //replanNeeded = false;
+        }
+    }
     ///---tu sa posielaju rychlosti do robota... vklude zakomentujte ak si chcete spravit svoje
-    /*if(useDirectCommands==0)
-    {
-        if(forwardspeed==0 && rotationspeed!=0)
-            robotCom.setRotationSpeed(rotationspeed);
-        else if(forwardspeed!=0 && rotationspeed==0)
-            robotCom.setTranslationSpeed(forwardspeed);
-        else if((forwardspeed!=0 && rotationspeed!=0))
-            robotCom.setArcSpeed(forwardspeed,forwardspeed/rotationspeed);
-        else
-            robotCom.setTranslationSpeed(0);
-    }
-    datacounter++;*/
-
-//////// Skontroluj prekážku pred robotom a zastav
-    // bool obstacleTooClose = false;
-    // for (int i = 0; i < copyOfLaserData.numberOfScans; ++i) {
-    //     float angle = copyOfLaserData.Data[i].scanAngle;
-    //     float distance = copyOfLaserData.Data[i].scanDistance / 10.0; // v cm
-
-    //     // Zameraj sa len na skenovanie vpredu (napr. ±15°)
-    //     if (angle > 345 || angle < 15) {
-    //         if (distance > 0 && distance < 30.0) { // menej než 30 cm
-    //             obstacleTooClose = true;
-    //             break;
-    //         }
-    //     }
-    // }
-
-    // if (obstacleTooClose) {
-    //     robotCom.setTranslationSpeed(0);
-    //     robotCom.setRotationSpeed(0);
-    //     std::cout << "Obstacle detected! Stopping." << std::endl;
-    //     return 0;
-    // }
-/////////////////////////////////////////////////////////////////////
-/// Ist popri stene
-    std::pair<double, double> targetWaypoint = waypointQueue.front();
-    double targetX = targetWaypoint.first;
-    double targetY = targetWaypoint.second;
-    // double deltaX = targetX - xko*100;
-    // double deltaY = targetY - y*100;
-    // double angleToGoal = atan2(deltaY, deltaX)* 180.0 / PI ; // v stupňoch //
-    // if (angleToGoal < 0) angleToGoal += 360;
-    // if (angleToGoal >360) angleToGoal -= 360;
-    double deltaX = targetX - xko*100;
-    double deltaY = targetY - y*100;
-    double angleToGoal = atan2(deltaY, deltaX);
-    angleToGoal = ((angleToGoal)*pi)/180.0;
-    double vzdialenostKCielu = sqrt(pow(deltaX, 2) + pow(deltaY, 2)); // v cm
-
-    static int state = 0; // 0 = zastav, 1 = toč doľava, 2 = choď dopredu popri stene
-    static int counter = 0;
-
-    //double crawlRotationSpeed = 0.00;
-
-    //switch (state) {
-    if ((copyOfLaserData.numberOfScans > 0 && isObstacleAhead(copyOfLaserData, 30)) || (isWallCrawling == true && !isObstacleAround(copyOfLaserData, 30))) {
-/////////////////////////////////////////////////////////////////////////////Vidim ciel
-            std::cout << "testujem cestu k cielu" << endl;
-            std::cout << "cielovi bod x" ;
-            std::cout << targetX << endl;
-            std::cout << "cielovi bod y" ;
-            std::cout << targetY << endl;
-            std::cout << "vzdialenostKCielu" ;
-            std::cout << vzdialenostKCielu << endl;
-            std::cout << "angleToGoal" ;
-            std::cout << angleToGoal << endl;
-
-        if (isPathToGoalClear(copyOfLaserData, angleToGoal, vzdialenostKCielu)) {
-            std::cout << "Vidím cieľ, idem rovno!" << endl;
-            isWallCrawling = false;
-        }
-
-
-//////////////////////////////////// //////////////////////////////////////////////
-            robotCom.setTranslationSpeed(0);
-            robotCom.setRotationSpeed(0);
-            state = 1;
-            counter = 0;
-    }
-    if(state == 1){// Otočenie
-        robotCom.setTranslationSpeed(0);
-        rotationspeed = 0.307694;
-        if(!isObstacleAround(copyOfLaserData, 30)){
-            rotationspeed = -0.307694;
-            state = 2;
-        }
-        robotCom.setRotationSpeed(rotationspeed); // otáčaj sa
-
-        counter++;
-        //std::cout << "tocim sa" << endl;
-        //if (isObstacleAhead(copyOfLaserData, 30) != true && counter == 100) {
-        if ((fi >= 90 && fi <= 91) || (fi >= 180 && fi <= -180) || (fi <= -89 && fi >= -90) || (fi <= -179 && fi >= -180) || (fi >= 0 && fi <= 1)) {  //|| (fi <= 0 && fi >= -1)
-            if((isObstacleAhead(copyOfLaserData, 30) != true && counter > 20) || (!isObstacleAround(copyOfLaserData, 30) && counter > 20)){
-                std::cout << "koniec tocenia" << endl;
-                robotCom.setRotationSpeed(0);
-                state = 2;
-                counter = 0;
-
-            }
-        }
-    }
-   if(state == 2){ // Choď dopredu popri stene
-        //std::cout << "case2" << endl;
-        if(!isObstacleAround(copyOfLaserData, 40)){
-
-            robotCom.setTranslationSpeed(0);
-            robotCom.setRotationSpeed(-0.307694);
-
-            if(isObstacleInPath(copyOfLaserData,50)){  /////////isObstacleAhead/////////////isObstacleInPath
-                robotCom.setRotationSpeed(0);
-                robotCom.setTranslationSpeed(200);
-               // state = 1;
-                // if(isObstacleInPath(copyOfLaserData, 29))
-                // robotCom.setTranslationSpeed(0);
-
-            }
-            else return 0;
-        }
-        robotCom.setRotationSpeed(0);
-        robotCom.setTranslationSpeed(200); // pomalý pohyb vpred
-        //std::cout << "vpred" << endl;
-        state = 0;
-
-    return 0; // preskoč klasické riadenie pomocou waypointov
-    }
-
-
-
-
-
-
-    if (useDirectCommands == 0 && !isObstacleAround(copyOfLaserData, 30) && isWallCrawling == false) {
+    if (useDirectCommands == 0) {
         if (!waypointQueue.empty()) {
             double angleDeviationThreshold = 0.1; //5.7 degrees
             double distanceDeviationThreshold = 0.1;
 
             std::pair<double, double> targetWaypoint = waypointQueue.front();
-            targetX = targetWaypoint.first;
-            targetY = targetWaypoint.second;
+            double targetX = targetWaypoint.first;
+            double targetY = targetWaypoint.second;
 
             // Calculate desired angle
             double deltaX = targetX - xko*100;
@@ -450,20 +368,20 @@ int robot::processThisRobot(TKobukiData robotdata)
             double distance = sqrt(pow(deltaX, 2) + pow(deltaY, 2));
 
             // angle and distance derivation
-            if((distance > distanceDeviationThreshold) && rotationspeed!=0.307694){
+            if((distance > distanceDeviationThreshold)){
                 // Distance PID
                 rotationspeed=0.0;
                 forwardspeed = distancePID->update(0, distance);
 
-                if(forwardspeed<15 && rotationspeed!=25.7){
+                if(forwardspeed<15){
                     forwardspeed=25;
                 }
-                 if(forwardspeed>200 && rotationspeed!=25.7){
+                 if(forwardspeed>200){
                      forwardspeed=200;
                  }
 
             }
-            if(abs(angleError) > angleDeviationThreshold*angleRefiner && rotationspeed!=25.7){
+            if(abs(angleError) > angleDeviationThreshold*angleRefiner){
                 // Rotation PID
                 forwardspeed = 0.0;
                 rotationspeed = rotationPID->update(0, angleError);
@@ -481,21 +399,17 @@ int robot::processThisRobot(TKobukiData robotdata)
             }
 
             // Apply speeds to robot
-            if (forwardspeed == 0 && rotationspeed != 0 && rotationspeed!=0.307694) {
+            if (forwardspeed == 0 && rotationspeed != 0) {
                 robotCom.setRotationSpeed(rotationspeed);
-                //std::cout << rotationspeed<<endl ;
-            } else if (forwardspeed != 0 && rotationspeed == 0 && rotationspeed!=0.307694) {
+            } else if (forwardspeed != 0 && rotationspeed == 0) {
                 robotCom.setTranslationSpeed(forwardspeed);
-                //std::cout << forwardspeed << endl; ;
-
-                //std::cout << forwardspeed<<endl ;
-            } else if (forwardspeed != 0 && rotationspeed != 0 && rotationspeed!=0.307694) {
+            } else if (forwardspeed != 0 && rotationspeed != 0) {
                 robotCom.setArcSpeed(forwardspeed, forwardspeed / rotationspeed);
-            } else if(rotationspeed!=0.307694) {
+            } else {
                 robotCom.setTranslationSpeed(0);
             }
         }
-        else if(rotationspeed!=0.307694) {
+        else {
             robotCom.setTranslationSpeed(0);
             robotCom.setRotationSpeed(0);
         }
@@ -504,187 +418,53 @@ int robot::processThisRobot(TKobukiData robotdata)
     return 0;
 }
 
-bool robot::isObstacleAhead(const LaserMeasurement& laserData, float thresholdDistance) {
-    for (int i = 0; i < laserData.numberOfScans; i++) {
-        float angle = laserData.Data[i].scanAngle;
-        float distance = laserData.Data[i].scanDistance / 10.0;
-
-        // Skenuj ±20° pred robotom
-        if ((angle >= 340 || angle <= 20) && distance < thresholdDistance && distance > 1.0) {
-            //std::cout << "stena vopred" << endl;
-            return true;
-        }
-    }
-    //std::cout << "volno" << endl;
-    return false;
-}
-
-bool robot::isPathToGoalClear(const LaserMeasurement& laserData, float angleToGoal, float requiredDistance) {
-    for (int i = 0; i < laserData.numberOfScans; i++) {
-        float angle = laserData.Data[i].scanAngle;
-        float distance = laserData.Data[i].scanDistance / 10.0;
-
-        //float diff = fabs(angle - angleToGoal);
-        //if (diff > 180) diff = 360 - diff;
-
-        // std::cout << "uhol do ciela:";
-        // std::cout << angleToGoal << endl;
-        // std::cout << "uhol zachyteneho luca";
-        // std::cout << angle << endl;
-        // std::cout << "vzdialenost zachytenu lucom:";
-        // std::cout << distance << endl;
-        // std::cout << "vzdailenost do ciela" ;
-        // std::cout << requiredDistance << endl;
-
-        //if (diff < 5.0) { // úzky lúč ±5°
-            if ((abs(angle) +- 5) == (abs(angleToGoal) +- 5) && distance > requiredDistance) {
-
-                // std::cout << "uhol do ciela:";
-                // std::cout << angleToGoal << endl;
-                // std::cout << "uhol zachyteneho luca";
-                // std::cout << angle << endl;
-                // std::cout << "vzdialenost zachytenu lucom:";
-                // std::cout << distance;
-                // std::cout << "vzdailenost do ciela" << endl;
-                // std::cout << requiredDistance << endl;
-                ///std::cout << "stena vopred" << endl;
-                ///
-                return true; // voľný výhľad
-
-            }
-
-    }
-    return false;
-}
-
-bool robot::isEmptyRight(const LaserMeasurement& laserData, float thresholdDistance) {
-    for (int i = 0; i < laserData.numberOfScans; i++) {
-        float angle = laserData.Data[i].scanAngle;
-        float distance = laserData.Data[i].scanDistance / 10.0;
-
-        // Skenuj ±20° pred robotom
-        if ((angle >= 260 || angle <= 280) && distance > thresholdDistance && distance > 1.0) {
-            //std::cout << "stena vopred" << endl;
-            return true;
-        }
-    }
-    //std::cout << "volno" << endl;
-    return false;
-}
-
-
-bool robot::isObstacleInPath(const LaserMeasurement& laserData, float thresholdDistance) {
-    for (int i = 0; i < laserData.numberOfScans; i++) {
-        float angle = laserData.Data[i].scanAngle;
-        float distance = laserData.Data[i].scanDistance / 10.0;
-
-        // Skenuj ±20° pred robotom
-        if ((angle >= 300 || angle <= 60) && distance < thresholdDistance && distance > 1.0) {
-            //std::cout << "stena vopred" << endl;
-            return true;
-        }
-    }
-    //std::cout << "volno" << endl;
-    return false;
-}
-
-bool robot::isObstacleAround(const LaserMeasurement& laserData, float thresholdDistance) {
-    for (int i = 0; i < laserData.numberOfScans; i++) {
-        float angle = laserData.Data[i].scanAngle;
-        float distance = laserData.Data[i].scanDistance / 10.0;
-
-        // Skenuj ±20° pred robotom
-        if (distance < thresholdDistance && distance > 1.0) {
-            isWallCrawling = true;
-            return true;
-        }
-    }
-    return false;
-}
-
-float robot::getRightWallDistance(const LaserMeasurement& laserData) {
-    float minDistance = 10000; // veľká hodnota
-    for (int i = 0; i < laserData.numberOfScans; i++) {
-        float angle = laserData.Data[i].scanAngle;
-        float distance = laserData.Data[i].scanDistance / 10.0;
-        if (angle >= 260 && angle <= 280 && distance > 1.0) {
-            if (distance < minDistance) {
-                minDistance = distance;
-            }
-        }
-    }
-    return minDistance;
-}
-
-// void robot::wall(LaserMeasurement laserData){
-//     for (int i = 0; i < laserData.numberOfScans; i++) {
-//         float distance = laserData.Data[i].scanDistance / 10.0;
-
-//         if(distance < 20 && forwardspeed!=0.0 ){   ////////&& 15 != abs(fi - starterFi)
-
-//             forwardspeed=0.0;
-//             rotationspeed=0.307694;
-//             robotCom.setRotationSpeed(rotationspeed);
-//             std::cout << "SOM TU" <<endl ;
-//             // if(starterFi == 0.0){
-//             //     starterFi = fi;
-//             // }
-//         }
-//     }
-// }
-
 ///toto je calback na data z lidaru, ktory ste podhodili robotu vo funkcii initAndStartRobot
 /// vola sa ked dojdu nove data z lidaru
 int robot::processThisLidar(LaserMeasurement laserData)
 {
+    static int init=0;
+    if(init==1){
+        map = updateMap(copyOfLaserData, xko, y, fi);
+    }
+    init=1;
     memcpy( &copyOfLaserData,&laserData,sizeof(LaserMeasurement));
-    //wall(laserData);
-    map = updateMap(copyOfLaserData, xko, y, fi);
     drawMap(map);
-
-    //robotdata.synctimestamp;
-
+    //drawCostMap(costMap);
     //tu mozete robit s datami z lidaru.. napriklad najst prekazky, zapisat do mapy. naplanovat ako sa prekazke vyhnut.
     // ale nic vypoctovo narocne - to iste vlakno ktore cita data z lidaru
-   // updateLaserPicture=1;
-    // std::cout << "\n";
-    // std::cout << laserData.Data[0].scanAngle;
-    // std::cout << "\n";
-    // std::cout << laserData.Data[1].scanAngle;
-    // std::cout << "\n";
-    // std::cout << laserData.Data[2].scanAngle;
-    // std::cout << "\n";
-    // std::cout << laserData.Data[200].scanAngle;
-
+    // updateLaserPicture=1;
     emit publishLidar(copyOfLaserData);
-   // update();//tento prikaz prinuti prekreslit obrazovku.. zavola sa paintEvent funkcia
-
-
+    //update();//tento prikaz prinuti prekreslit obrazovku.. zavola sa paintEvent funkcia
     return 0;
 
 }
 
-robot::RobotPose robot::interpolatePose(unsigned int timestamp) {
+robot::RobotPose robot::interpolatePose(unsigned int timestamp,int &prevIndex) {
     if (poseHistory.empty()) {
+        prevIndex=1;
         return RobotPose(0, 0.0, 0.0, 0.0);
     }
-    if (poseHistory.size() < 2) return poseHistory.back();
-    for (size_t i = 1; i < poseHistory.size(); ++i) {
+    if (poseHistory.size() < 2){
+        prevIndex=1;
+        return poseHistory.back();
+    }
+    for (size_t i = prevIndex; i < poseHistory.size(); ++i) {
         RobotPose& before = poseHistory[i - 1];
         RobotPose& after = poseHistory[i];
         if (before.timestamp <= timestamp && timestamp <= after.timestamp) {
+            prevIndex=i;
             double ratio = (timestamp - before.timestamp) / double(after.timestamp - before.timestamp);
 
-            double x = before.x + ratio * (after.x - before.x);
-            double y = before.y + ratio * (after.y - before.y);
+            double x = before.x*100 + ratio * (after.x - before.x);
+            double y = before.y*100 + ratio * (after.y - before.y);
 
-            // Interpolating angle properly (handles wrap-around)
             double angleDiff = atan2(sin(after.angle - before.angle), cos(after.angle - before.angle));
             double angle = before.angle + ratio * angleDiff;
 
             return {timestamp, x, y, angle};
         }
     }
+    prevIndex=1;
     return poseHistory.back();
 }
 
