@@ -111,32 +111,14 @@ void robot::calculateXY(TKobukiData robotdata) { // double& xko, double& y
     double deltaDistance = (rightWheelDist + leftWheelDist)/2;
 
     // uhol
-    //double prevGyro;
     double gyro = robotdata.GyroAngle/100.00 - prevGyro;
     double gyroRad = (((gyro)*pi)/180.0);
-    //double deltaFi = (rigtWheelDist - leftWheelDist) / wheelBase;
-    // double deltaFi = (rightWheelDist - leftWheelDist);
-    // double deltaFi = (deltaEncoderRight - deltaEncoderLeft);
-    //fi += deltaFi;
-    //double fiInRad = fi * (pi / 180.0);
-    //double prevFiInRad= prevFi * (pi/180.0);
-    //fi = atan2(sin(fi), cos(fi));
 
     //x,y
-   // if (prevGyro == gyroRad)
     {
         xko += deltaDistance * (double) cos(gyroRad);
         y += deltaDistance * (double) sin(gyroRad);
     }
-   /* else
-    {
-        // xko += deltaDistance * (double)(sin(gyroRad) - sin(prevGyro*pi/180.00));
-        // y -= deltaDistance * (double)(cos(gyroRad) - cos(prevGyro*pi/180.00));
-        xko += deltaDistance * (double)(sin(gyroRad)- sin(prevGyro));
-        y -= deltaDistance * (double)(cos(gyroRad) -  cos(prevGyro));
-    }*/
-    //prevFi = fi;
-    //prevGyro=gyroRad;
     fi=gyro;
     poseHistory.emplace_back(robotdata.synctimestamp, xko, y, gyroRad);
 }
@@ -212,7 +194,6 @@ std::vector<std::vector<int>> robot::updateCostMapFloodFill(Cella goal, Cella st
 
             // Check bounds
             if (nx >= 0 && ny >= 0 && nx < cols && ny < rows) {
-                // Only spread to free cells that haven't been visited
                 if (map[ny][nx] == 0 && newCostMap[ny][nx] == 0) { //obstacle is -2
                     newCostMap[ny][nx] = currentCost + 1;
                     queue.push_back({nx, ny});

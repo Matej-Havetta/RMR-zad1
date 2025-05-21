@@ -8,7 +8,7 @@ PIDController::PIDController (double p, double i, double d, double step, double 
 
 double PIDController::update(double setpoint, double measured_value) {
         double error = measured_value;
-        double output = Kp * error; //+ Ki * integral; // + Kd * derivative;
+        double output = Kp * error;
         if(output>prev_output+step){
             output = prev_output+step;
         }
