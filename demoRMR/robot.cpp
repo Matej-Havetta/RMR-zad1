@@ -21,7 +21,6 @@ robot::robot(QObject *parent) : QObject(parent)
 
 void robot::initAndStartRobot(std::string ipaddress)
 {
-    // Defining PID gains
     const double kp_rotation = 3; //real
     const double ki_rotation = 0.01;
     const double kd_rotation = 0.05;
@@ -199,7 +198,6 @@ std::vector<std::vector<int>> robot::updateCostMapFloodFill(Cella goal, Cella st
     queue.push_back(gridGoal); //    queue.push_back({gridGoalX,gridGoalY});
     newCostMap[gridGoalY][gridGoalX] = 2;  // Start cost
 
-    // Directions: 4-connected neighbors (you can expand to 8 if you want diagonals)
     const std::vector<std::pair<int, int>> directions = {
         {1, 0}, {-1, 0}, {0, 1}, {0, -1}
     };
@@ -321,12 +319,11 @@ std::vector<robot::Cella> robot::extractPathFromCostMap(Cella start) { // const 
     //     }
 
     //     if (!found) {
-    //         std::cerr << "Backtracking failed. Could not find a neighbor with lower cost.\n";
+    //         std::cerr << "Fuck, backtracking failed. Could not find a neighbor with less cost.\n";
     //         return std::vector<Cella>();  // return empty path
     //     }
     // }
 
-    // Optionally reverse if you want from goal → start
     //std::reverse(path.begin(), path.end());
     return path;
 }
@@ -345,7 +342,7 @@ void robot::drawMap(std::vector<std::vector<int>> map){
                 outfile << "-2";
             }
             else{
-                cout << "WHAT THE JSS FCK";
+                cout << "no more swear words, I swear";
             }
         }
         cout << endl;
@@ -591,10 +588,8 @@ std::vector<std::vector<int>> robot::readMapFromFile(const std::string& filename
             switch (c) {
             case ' ': row.push_back(0); break;     // Free space
             case '1': row.push_back(-2); break;     // Wall or obstacle
-            //case '-': row.push_back(-1); break;    // Special marker
-            default:
-                row.push_back(0); // Or handle error
-                break;
+            //case '-': row.push_back(-1); break;    // If you see this in the map, you have a reason to be unhappy.s
+            default: row.push_back(0); break;
             }
         }
         map.push_back(row);
@@ -610,8 +605,6 @@ std::vector<robot::Cella> robot::findZlomoveBody(const std::vector<Cella>& path)
     if (path.size() < 2) {
         return path; // No turning points possible
     }
-
-    // Always include the first point
     zlomoveBody.push_back(path.front());
 
     // Previous direction
@@ -622,16 +615,16 @@ std::vector<robot::Cella> robot::findZlomoveBody(const std::vector<Cella>& path)
         int dx = path[i].x - path[i - 1].x;
         int dy = path[i].y - path[i - 1].y;
 
-        // If direction changed, it's a turning point
+        // It's a turning point
         if (dx != dxPrev || dy != dyPrev) {
-            zlomoveBody.push_back(path[i - 1]); // Add turning point
+            zlomoveBody.push_back(path[i - 1]);
         }
 
         dxPrev = dx;
         dyPrev = dy;
     }
 
-    // Always include the last point
+    // Add goal
     zlomoveBody.push_back(path.back());
 
     return zlomoveBody;
