@@ -105,32 +105,15 @@ void robot::calculateXY(TKobukiData robotdata) { // double& xko, double& y
     double deltaDistance = (rightWheelDist + leftWheelDist)/2;
 
     // uhol
-    //double prevGyro;
     double gyro = robotdata.GyroAngle/100.00 - prevGyro;
     double gyroRad = (((gyro)*pi)/180.0);
-    //double deltaFi = (rightWheelDist - leftWheelDist) / wheelBase;
-    // double deltaFi = (rightWheelDist - leftWheelDist);
-    // double deltaFi = (deltaEncoderRight - deltaEncoderLeft);
-    //fi += deltaFi;
-    //double fiInRad = fi * (pi / 180.0);
-    //double prevFiInRad= prevFi * (pi/180.0);
-    //fi = atan2(sin(fi), cos(fi));
+
 
     //x,y
-   // if (prevGyro == gyroRad)
     {
         xko += deltaDistance * (double) cos(gyroRad);
         y += deltaDistance * (double) sin(gyroRad);
     }
-   /* else
-    {
-        // xko += deltaDistance * (double)(sin(gyroRad) - sin(prevGyro*pi/180.00));
-        // y -= deltaDistance * (double)(cos(gyroRad) - cos(prevGyro*pi/180.00));
-        xko += deltaDistance * (double)(sin(gyroRad)- sin(prevGyro));
-        y -= deltaDistance * (double)(cos(gyroRad) -  cos(prevGyro));
-    }*/
-    //prevFi = fi;
-    //prevGyro=gyroRad;
     fi=gyro;
 }
 std::vector<std::vector<int>> robot::updateMap(LaserMeasurement laserMeasurement){
@@ -161,37 +144,16 @@ std::vector<std::vector<int>> robot::updateMap(LaserMeasurement laserMeasurement
 void robot::saveMap()
 {
     cout << "nova mapa" << endl;
-
     std::ofstream outfile("C:\\Users\\mahav\\Documents\\QtDesignStudio\\Zad1\\RMR-zad1\\mapa.txt");
-
-    // Write the array contents to the file
+    // Write the array to file
     for (int i = 0; i < gridSize; i++){
-        //cout << "pad1" << endl;
         for (int j = 0; j < gridSize; j++){
-            //cout << "pad2" << endl;
-            // if(map[i][j] == 1){
-            //     cout << "pad3" << endl;
-            //     //                outfile << ' ' << " ";
-            //     //outfile << 1;
-            //     //                outfile << i << j;
-            // }
-            // else{
-            //     //                outfile << '*' << " ";
-            //     //outfile << " ";
-            //     //                           outfile << i << j;
-            //     cout << "pad4" << endl;
-            // }
             cout << map[i][j];
-
         }
     }
-
     // Close the output file
     outfile.close();
-
     cout<<"zapisal som"<<endl;
-
-
 }
 
 
@@ -241,7 +203,6 @@ int robot::processThisRobot(TKobukiData robotdata)
     map = updateMap(copyOfLaserData);
 
 ///TU PISTE KOD... TOTO JE TO MIESTO KED NEVIETE KDE ZACAT,TAK JE TO NAOZAJ TU. AK AJ TAK NEVIETE, SPYTAJTE SA CVICIACEHO MA TU NATO STRING KTORY DA DO HLADANIA XXX
-
     ///kazdy piaty krat, aby to ui moc nepreblikavalo..
     if(datacounter%5==0)
     {
@@ -255,23 +216,10 @@ int robot::processThisRobot(TKobukiData robotdata)
         ///posielame sem nezmysli.. pohrajte sa nech sem idu zmysluplne veci
         emit publishPosition(xko*100,y*100,fi);
         // std::cout << x;
-        ///toto neodporucam na nejake komplikovane struktury. signal slot robi kopiu dat. radsej vtedy posielajte
         /// prazdny signal a slot bude vykreslovat strukturu (vtedy ju musite mat samozrejme ako member premmennu v mainwindow. ak u niekoho najdem globalnu premennu,tak bude cistit bludisko zubnou kefkou.. kefku dodam)
         /// vtedy ale odporucam pouzit mutex, aby sa vam nestalo ze budete pocas vypisovania prepisovat niekde inde
     }
     ///---tu sa posielaju rychlosti do robota... vklude zakomentujte ak si chcete spravit svoje
-    /*if(useDirectCommands==0)
-    {
-        if(forwardspeed==0 && rotationspeed!=0)
-            robotCom.setRotationSpeed(rotationspeed);
-        else if(forwardspeed!=0 && rotationspeed==0)
-            robotCom.setTranslationSpeed(forwardspeed);
-        else if((forwardspeed!=0 && rotationspeed!=0))
-            robotCom.setArcSpeed(forwardspeed,forwardspeed/rotationspeed);
-        else
-            robotCom.setTranslationSpeed(0);
-    }
-    datacounter++;*/
 
     if (useDirectCommands == 0) {
         if (!waypointQueue.empty()) {
@@ -354,15 +302,6 @@ int robot::processThisLidar(LaserMeasurement laserData)
     //tu mozete robit s datami z lidaru.. napriklad najst prekazky, zapisat do mapy. naplanovat ako sa prekazke vyhnut.
     // ale nic vypoctovo narocne - to iste vlakno ktore cita data z lidaru
    // updateLaserPicture=1;
-    // std::cout << "\n";
-    // std::cout << laserData.Data[0].scanAngle;
-    // std::cout << "\n";
-    // std::cout << laserData.Data[1].scanAngle;
-    // std::cout << "\n";
-    // std::cout << laserData.Data[2].scanAngle;
-    // std::cout << "\n";
-    // std::cout << laserData.Data[200].scanAngle;
-
     emit publishLidar(copyOfLaserData);
    // update();//tento prikaz prinuti prekreslit obrazovku.. zavola sa paintEvent funkcia
 
