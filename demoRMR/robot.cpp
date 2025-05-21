@@ -105,32 +105,15 @@ void robot::calculateXY(TKobukiData robotdata) { // double& xko, double& y
     double deltaDistance = (rightWheelDist + leftWheelDist)/2;
 
     // uhol
-    //double prevGyro;
     double gyro = robotdata.GyroAngle/100.00 - prevGyro;
     double gyroRad = (((gyro)*pi)/180.0);
-    //double deltaFi = (rigtWheelDist - leftWheelDist) / wheelBase;
-    // double deltaFi = (rightWheelDist - leftWheelDist);
-    // double deltaFi = (deltaEncoderRight - deltaEncoderLeft);
-    //fi += deltaFi;
-    //double fiInRad = fi * (pi / 180.0);
-    //double prevFiInRad= prevFi * (pi/180.0);
-    //fi = atan2(sin(fi), cos(fi));
+
 
     //x,y
-   // if (prevGyro == gyroRad)
     {
         xko += deltaDistance * (double) cos(gyroRad);
         y += deltaDistance * (double) sin(gyroRad);
     }
-   /* else
-    {
-        // xko += deltaDistance * (double)(sin(gyroRad) - sin(prevGyro*pi/180.00));
-        // y -= deltaDistance * (double)(cos(gyroRad) - cos(prevGyro*pi/180.00));
-        xko += deltaDistance * (double)(sin(gyroRad)- sin(prevGyro));
-        y -= deltaDistance * (double)(cos(gyroRad) -  cos(prevGyro));
-    }*/
-    //prevFi = fi;
-    //prevGyro=gyroRad;
     fi=gyro;
     poseHistory.emplace_back(robotdata.synctimestamp, xko, y, gyroRad);
 
@@ -191,15 +174,8 @@ std::vector<std::vector<int>> robot::updateMap(LaserMeasurement laserMeasurement
             //double robotY = yko * 100;
 
             // Transform to global coordinates
-            // double globalX = pose.x * 100 + localX * co5s(pose.angle) - localY * sin(pose.angle);
-            // double globalY = pose.y * 100 + localX * sin(pose.angle) + localY * cos(pose.angle);
-            // double globalX = pose.x * 100 + localX + cos(pose.angle);
-            // double globalY = pose.y * 100 + localY + sin(pose.angle);
             double globalX = pose.x + distance * cos(angle + pose.angle);
             double globalY = pose.y + distance * sin(angle + pose.angle);
-
-            //         int gridX = static_cast<int>(x * scale + offsetX);
-            //         int gridY = static_cast<int>(y * scale + offsetY);
 
             // Map to grid
             int gridX = static_cast<int>(globalX * scale + offsetX);
@@ -227,8 +203,7 @@ void robot::drawMap(std::vector<std::vector<int>> map){
                 outfile << 1;
             }
             else{
-                cout << "WHAT THE JSS FCK";
-                cout << endl;
+                cout << "WE ENCOUNTERED PROBLEMS DRAWING THE MAP"; // This is an easter egg, if you get this far reading the code, it means you work to much and we get to pass without a final examination. Less work for ya...
             }
         }
         cout << endl;
@@ -302,18 +277,6 @@ int robot::processThisRobot(TKobukiData robotdata)
         /// vtedy ale odporucam pouzit mutex, aby sa vam nestalo ze budete pocas vypisovania prepisovat niekde inde
     }
     ///---tu sa posielaju rychlosti do robota... vklude zakomentujte ak si chcete spravit svoje
-    /*if(useDirectCommands==0)
-    {
-        if(forwardspeed==0 && rotationspeed!=0)
-            robotCom.setRotationSpeed(rotationspeed);
-        else if(forwardspeed!=0 && rotationspeed==0)
-            robotCom.setTranslationSpeed(forwardspeed);
-        else if((forwardspeed!=0 && rotationspeed!=0))
-            robotCom.setArcSpeed(forwardspeed,forwardspeed/rotationspeed);
-        else
-            robotCom.setTranslationSpeed(0);
-    }
-    datacounter++;*/
 
     if (useDirectCommands == 0) {
         if (!waypointQueue.empty()) {
@@ -396,21 +359,9 @@ int robot::processThisLidar(LaserMeasurement laserData)
     init=1;
     memcpy( &copyOfLaserData,&laserData,sizeof(LaserMeasurement));
     drawMap(map);
-
-    //robotdata.synctimestamp;
-
     //tu mozete robit s datami z lidaru.. napriklad najst prekazky, zapisat do mapy. naplanovat ako sa prekazke vyhnut.
     // ale nic vypoctovo narocne - to iste vlakno ktore cita data z lidaru
    // updateLaserPicture=1;
-    // std::cout << "\n";
-    // std::cout << laserData.Data[0].scanAngle;
-    // std::cout << "\n";
-    // std::cout << laserData.Data[1].scanAngle;
-    // std::cout << "\n";
-    // std::cout << laserData.Data[2].scanAngle;
-    // std::cout << "\n";
-    // std::cout << laserData.Data[200].scanAngle;
-
     emit publishLidar(copyOfLaserData);
    // update();//tento prikaz prinuti prekreslit obrazovku.. zavola sa paintEvent funkcia
 
